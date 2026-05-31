@@ -1,6 +1,8 @@
-# Coralboard Sensor HAT — Gemy Code Lab
+# Meet Gemy — Coralboard Code Lab (SL2610 + Sensor HAT)
 
-Lab documentation for the **robot** repo. Source code lives in the parent project:
+**Teach edge AI on real hardware:** wave detection, on-device speech, buzzer + RGB personality — on the [Synaptics Coralboard](https://www.synaptics.com/) with Sensor HAT. Windows host scripts included.
+
+Lab documentation for the **[gemy-coralboard-lab](https://github.com/DeveloperMattC/gemy-coralboard-lab)** repo. Source code lives at the project root:
 
 | Location | Contents |
 |----------|----------|
@@ -74,7 +76,7 @@ By the end of the lab, participants can:
 ## Quick start (instructor smoke test)
 
 ```powershell
-cd path\to\robot
+cd path\to\gemy-coralboard-lab
 
 # 1. Re-arm USB internet sharing (admin UAC)
 .\install-ncm-signed.ps1

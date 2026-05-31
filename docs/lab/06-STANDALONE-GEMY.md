@@ -21,7 +21,7 @@ The Sensor HAT does **not** add a separate app button; it has **reset** (reboots
 ## One-time install (PC connected)
 
 ```powershell
-cd path\to\robot
+cd path\to\gemy-coralboard-lab
 powershell -ExecutionPolicy Bypass -File install-gemy-standalone.ps1
 ```
 

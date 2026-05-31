@@ -30,7 +30,7 @@ Add 30 min buffer for Wi‑Fi, driver, or speech model load time on first run.
 - [ ] Boards flashed with `sl2610-examples` + `.venv`
 - [ ] `winget install Google.PlatformTools` on student machines (or USB stick with platform-tools)
 - [ ] Run `install-ncm-signed.ps1` once per room PC (admin) or have IT preconfigure NCM
-- [ ] Copy entire `robot` folder to shared drive or USB
+- [ ] Copy entire `gemy-coralboard-lab` repo to shared drive or USB (or have students `git clone`)
 - [ ] Print [PROMPTS-ONLY.md](PROMPTS-ONLY.md) or share link
 - [ ] Test one board: hub → clean up → Gemy → say “Gemy”
 - [ ] Post **emergency buzzer** slide: `adb shell python3 /home/root/hat.py buzzer off`
@@ -39,7 +39,7 @@ Add 30 min buffer for Wi‑Fi, driver, or speech model load time on first run.
 
 1. **Cursor** (recommended) or VS Code + Copilot  
 2. **ADB** in PATH  
-3. **robot** folder  
+3. **gemy-coralboard-lab** folder (repo root)  
 4. Coralboard + HAT + USB-C cable  
 
 They do **not** need Python installed on Windows (runs on the board).

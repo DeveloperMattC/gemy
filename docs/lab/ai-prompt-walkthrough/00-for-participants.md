@@ -4,7 +4,7 @@ You do **not** need to know how to program. You need:
 
 1. A **Windows laptop**
 2. **Cursor** (free editor with AI built in) — [cursor.com](https://cursor.com), or any chat AI that can edit files in a folder
-3. This **`robot`** folder on your computer (from the host)
+3. This **`gemy-coralboard-lab`** folder on your computer (clone from GitHub or copy from the host)
 4. Optional: a **Coralboard** with **Sensor HAT** plugged in (camera, mic, buzzer, colored lights)
 
 ## What you are building
@@ -32,7 +32,7 @@ A small robot personality named **Gemy** on a Synaptics Coralboard:
 ## Open the project in Cursor
 
 1. Install Cursor if you have not already.  
-2. **File → Open Folder** → choose the `robot` folder.  
+2. **File → Open Folder** → choose the `gemy-coralboard-lab` folder.  
 3. Open the AI chat (usually on the right).  
 4. Tell the AI: *“Read docs/lab/ai-prompt-walkthrough/02-prompt-journey.md and help me do Step 1.”*
 

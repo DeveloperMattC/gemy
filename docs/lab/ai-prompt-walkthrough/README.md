@@ -1,4 +1,6 @@
-# Build Gemy with AI — prompt walkthrough (non-engineers)
+# Build Gemy with AI — zero-code Coralboard lab (SL2610 + Sensor HAT)
+
+**For students, jam hosts, and curious devs:** paste prompts, run demos, and end with a robot that sees, hears, and reacts — no Python required.
 
 This folder is a **script you can read aloud** while participants **copy prompts into an AI assistant** (Cursor, ChatGPT, Copilot, etc.). No one needs to write code by hand.
 
@@ -14,7 +16,7 @@ The finished project already exists in this repo (`board/python/greeter.py`, etc
 
 ## How a session works (90–120 min)
 
-1. Everyone opens the **`robot`** folder in Cursor (or similar).
+1. Everyone clones **[gemy-coralboard-lab](https://github.com/DeveloperMattC/gemy-coralboard-lab)** and opens that folder in Cursor (or similar).
 2. You plug in a Coralboard + Sensor HAT per table (or demo one board on a projector).
 3. For each step in **02-prompt-journey.md**, participants paste the prompt, let the AI edit files, then run the **Try it** command you announce.
 4. By the end they have **Gemy**: wave, voice, moods, and a Control Center button.

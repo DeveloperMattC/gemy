@@ -1,6 +1,6 @@
 # Google / workshop submission checklist
 
-Use this when packaging the **robot** repo (especially `docs/lab/`) for review.
+Use this when packaging the **gemy-coralboard-lab** repo (especially `docs/lab/`) for review.
 
 ## Required artifacts
 
@@ -32,7 +32,7 @@ These remain in the parent `robot/` repo — link or bundle separately if requir
 ## Zip command (PowerShell)
 
 ```powershell
-Compress-Archive -Path "robot" -DestinationPath "coralboard-gemy-lab.zip" -Force
+Compress-Archive -Path "gemy-coralboard-lab" -DestinationPath "coralboard-gemy-lab.zip" -Force
 ```
 
 ## Codelab conversion tips
