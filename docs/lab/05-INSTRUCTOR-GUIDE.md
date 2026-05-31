@@ -17,7 +17,7 @@
 - [ ] ADB on lab PCs (`winget install Google.PlatformTools`)
 - [ ] Run `install-ncm-signed.ps1` once per PC (admin) if internet needed
 - [ ] Test one board: `make-shortcut.ps1` → Control Center → Start Gemy — voice
-- [ ] Clone [gemy-coralboard-lab](https://github.com/DeveloperMattC/gemy-coralboard-lab) to shared drive
+- [ ] Clone [gemy](https://github.com/DeveloperMattC/gemy) to shared drive
 
 ---
 

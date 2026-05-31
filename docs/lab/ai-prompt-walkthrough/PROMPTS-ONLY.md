@@ -7,7 +7,7 @@ Copy each block into Cursor or ChatGPT. Run the matching command your instructor
 **1A — Orient**
 
 ```
-I'm doing a code jam with a Coralboard SL2610 and Sensor HAT (camera, mic, buzzer, red/green/blue LEDs). The project is the gemy-coralboard-lab repo. Please read README.md and docs/CORALBOARD-GUIDE.md and give me a 5-bullet summary of what this repo does in plain English. No jargon.
+I'm doing a code jam with a Coralboard SL2610 and Sensor HAT (camera, mic, buzzer, red/green/blue LEDs). The project is the gemy repo (github.com/DeveloperMattC/gemy). Please read README.md and docs/CORALBOARD-GUIDE.md and give me a 5-bullet summary of what this repo does in plain English. No jargon.
 ```
 
 **1B — ADB check**

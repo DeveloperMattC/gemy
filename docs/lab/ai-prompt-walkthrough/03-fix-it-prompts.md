@@ -1,6 +1,6 @@
 # Fix-it prompts (when something breaks)
 
-Paste these into the AI when a step fails. Stay in the **gemy-coralboard-lab** repo folder.
+Paste these into the AI when a step fails. Stay in the **gemy** repo folder.
 
 ---
 

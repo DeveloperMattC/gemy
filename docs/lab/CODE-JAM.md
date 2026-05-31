@@ -7,7 +7,7 @@
 | **Time** | ~90 minutes (or 60 min fast track) |
 | **Gear** | Windows laptop + Coralboard + Sensor HAT + USB-C cable |
 | **Skill level** | Zero to vibe coder — no Python required if you use AI |
-| **Repo** | [github.com/DeveloperMattC/gemy-coralboard-lab](https://github.com/DeveloperMattC/gemy-coralboard-lab) |
+| **Repo** | [github.com/DeveloperMattC/gemy](https://github.com/DeveloperMattC/gemy) |
 
 ---
 
@@ -55,8 +55,8 @@ Laptop talks to the board. One dashboard controls everything.
 ### Do this
 
 ```powershell
-git clone https://github.com/DeveloperMattC/gemy-coralboard-lab.git
-cd gemy-coralboard-lab
+git clone https://github.com/DeveloperMattC/gemy.git
+cd gemy
 winget install Google.PlatformTools
 powershell -ExecutionPolicy Bypass -File make-shortcut.ps1
 ```

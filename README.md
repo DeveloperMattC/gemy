@@ -25,8 +25,8 @@
 ## 5-minute setup
 
 ```powershell
-git clone https://github.com/DeveloperMattC/gemy-coralboard-lab.git
-cd gemy-coralboard-lab
+git clone https://github.com/DeveloperMattC/gemy.git
+cd gemy
 winget install Google.PlatformTools
 powershell -ExecutionPolicy Bypass -File make-shortcut.ps1
 ```
