@@ -5,7 +5,7 @@
 ```mermaid
 flowchart LR
   subgraph Host["Windows PC"]
-    HUB[coralboard-hub.ps1]
+    HUB[Control Center browser UI]
     GREET[greet-demo.ps1]
     ADB[adb]
     ICS[USB NCM + ICS]
@@ -47,7 +47,7 @@ flowchart TB
   subgraph EarsThread["ears thread"]
     VAD[Silero VAD segments]
     STT[Moonshine transcribe]
-    KW[classify_keywords]
+    KW[classify_utterance keywords math]
     GEM[try_gemma_mood_assist optional]
     RES[resolve_reaction_kind]
   end
@@ -82,7 +82,7 @@ PDM microphone (HAT)
     → sounddevice InputStream
     → SileroSpeechSegmenter (utterance boundaries)
     → MoonshineTranscriber (text string)
-    → classify_utterance (keywords first)
+    → classify_utterance (keywords, yes/no, math, jokes)
     → optional gemma_mood worker (if --gemma-mood and unclear)
     → resolve_reaction_kind → gemy|greet|funny|nice|mean|sad|yes|no|neutral
     → Greeter.react(kind)
@@ -119,7 +119,7 @@ HAT mic (or typed text)
     → translated text (no HAT beep/LED reaction)
 ```
 
-Launched from Windows via `connect-gemma.ps1` — not used by `wave_detect.py` or `greeter.py` vision.
+Run on the board from `/home/root/sl2610-examples/gemma_translate/` — **not** used by `greeter.py`.
 
 ---
 
@@ -127,7 +127,7 @@ Launched from Windows via `connect-gemma.ps1` — not used by `wave_detect.py` o
 
 | Resource | Owner | Conflict if |
 |----------|-------|-------------|
-| `/dev/video0` | One process | `wave_detect.py` + `greeter.py` both running |
+| `/dev/video0` | One `greeter.py` (vision thread) | Duplicate greeter or stale demo |
 | GPIO buzzer line | Last `gpioset` | Stuck ON if not driven HIGH |
 | ALSA capture | One `InputStream` | Rare duplicate if two speech apps run |
 | CPU (2 cores) | Vision + STT compete | High `--fps` breaks speech |
@@ -162,13 +162,17 @@ stateDiagram-v2
 
 ```
 /home/root/
-  greeter.py          # lab main
-  hat.py              # hardware library
-  hat_photo.jpg       # optional captures
+  greeter.py
+  hat.py
+  gemma_mood.py
+  gemma_mood_worker.py
+  gemy_stability.py
+  gemy_diag.py
+  gemy.log
   sl2610-examples/
     .venv/bin/python3
     utils/speech.py
-    gemma_translate/  # official demos
+    gemma_translate/   # optional Synaptics demos
 ```
 
 ---

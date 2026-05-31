@@ -48,9 +48,9 @@ They do **not** need Python installed on Windows (runs on the board).
 
 1. **One prompt at a time** — wait for checkpoint.  
 2. **Always Clean up board** before voice (Step 5+).  
-3. **Do not run wave-demo and greet-demo together** — wave has no mic and steals the camera.  
-4. **Let the AI finish** before clicking Run — but review diffs if curious.  
-5. **It's OK to skip to the finished repo** for the demo; the learning is the journey.
+3. **Always cleanup** before voice demos (`cleanup-board.ps1` or Control Center).  
+4. **Do not run two greeter sessions** — duplicate processes steal the camera/mic.  
+5. **Let the AI finish** before clicking Run — but review diffs if curious.
 
 ## If the repo already has all the code
 
@@ -66,7 +66,7 @@ Extension prompts for fast groups:
 
 | Symptom | You say | Do |
 |---------|---------|-----|
-| Voice dead, wave works | “Old wave demo is still running.” | `cleanup-board.ps1` |
+| Voice dead, wave works | “Stale greeter or busy camera.” | `cleanup-board.ps1` |
 | No `[ears] listening` | “Wait 20 seconds for speech model.” | Wait; check internet once |
 | Buzzer stuck | “GPIO latched on.” | hat-gui STOP or `buzzer off` |
 | AI edited wrong file | “Point it at board/python/” | Paste path in next prompt |

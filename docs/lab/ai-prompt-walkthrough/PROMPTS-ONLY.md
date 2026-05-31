@@ -7,62 +7,51 @@ Copy each block into Cursor or ChatGPT. Run the matching command your instructor
 **1A — Orient**
 
 ```
-I'm doing a code jam with a Coralboard SL2610 and Sensor HAT (camera, mic, buzzer, red/green/blue LEDs). The project is the gemy repo (github.com/DeveloperMattC/gemy). Please read README.md and docs/CORALBOARD-GUIDE.md and give me a 5-bullet summary of what this repo does in plain English. No jargon.
+I'm in the Gemy Code Jam (github.com/DeveloperMattC/gemy) with a Coralboard SL2610 + Sensor HAT. Read README.md and docs/lab/CODE-JAM.md. Give me a 5-bullet summary in plain English.
 ```
 
 **1B — ADB check**
 
 ```
-Help me verify ADB works. Give me the exact PowerShell commands to run from the repo root, and what success looks like. My board is plugged in via USB-C.
+Help me verify ADB from repo root. Exact PowerShell commands and what success looks like. Board plugged in via USB-C.
 ```
 
 ---
 
-**2A — hat.py**
+**2A — Test hat.py**
 
 ```
-Create board/python/hat.py for the Coralboard Sensor HAT:
-- Buzzer on GPIO BUZZERn (active low). IMPORTANT: gpioset latches on this board — every beep must end with the line driven HIGH (off).
-- LEDs via /sys/class/leds red/green/blue:status
-- Commands: beep, beep N, r2d2, siren, led, blink, rainbow, photo (camera needs venv OpenCV and fix dark OV5647 by setting exposure on /dev/v4l-subdev2 after stream starts)
-- CLI: python3 hat.py beep, etc.
-Keep it one file, well commented for beginners.
+Explain board/python/hat.py for beginners. How do I test beep, rainbow, and STOP via adb push and adb shell from repo root?
 ```
 
-**2B — More beeps**
+**2B — HAT GUI**
 
 ```
-Add to board/python/hat.py: r2d2, chirp, warble, alarm, and sos buzzer patterns (rhythm only, no pitch change). Ensure buzzer always ends OFF.
+How do I open hat-gui.ps1 from this repo? What buttons test beep and STOP?
 ```
 
 ---
 
-**3A — HAT GUI**
+**3A — Start Gemy**
 
 ```
-Create windows/demos/hat-gui.ps1: a WinForms GUI that runs hat.py on the board via adb. Buttons for beep, beep x3, tone, siren, r2d2, warble, chirp, alarm, sos, red/green/blue LEDs, rainbow, take photo (venv python), and red STOP for buzzer off. Fix PowerShell $args collision by not naming a parameter $args. Push hat.py before camera commands.
-```
-
----
-
-**4A — Wave** (OpenCV only — **not** Gemma 3)
-
-```
-Create board/python/wave_detect.py: OpenCV on /dev/video0, motion detection, count horizontal reversals to detect a waving hand, then call hat.beep(2). Use hat.py from same folder. Include --sensitivity low|medium|high. Cap processing so it doesn't hog CPU. Always release camera and buzzer off on exit. Do NOT use Gemma 3 or any LLM — pure motion math.
+Explain board/python/greeter.py: speech, moods, math quizzes (plus/times), how to start with greet-demo.ps1 or Control Center. What line means ready? What should I say to test?
 ```
 
 ---
 
-**5A — Gemy (full greeter)**
+**4A — Camera + wave**
 
 ```
-Create board/python/greeter.py named Gemy:
-- Import hat.py and sl2610-examples utils.speech (Moonshine + Silero VAD)
-- Listen for speech; classify into: gemy (name), greet (hello/hi), funny (haha/lol), nice (thanks/good/love), mean (stupid/hate), neutral (anything else)
-- Reactions (hat.gemy_*): gemy = name beep + mini rainbow; greet = rainbow + beep; funny = r2d2 + double rainbow; nice = happy beeps + rainbow; mean = red blinks; sad = blue cries; yes/no = chirps or red; neutral = soft beep + rainbow. Keywords first, optional Gemma assist, invalid mood → neutral. See docs/lab/08-GEMY-MOODS-AND-REACTIONS.md
-- Vision thread: same wave + hand-held-up detection as before
-- Load speech model BEFORE camera loop; cap vision --fps 5; kill stale wave_detect on startup
-- 1 second cooldown between reactions; idle watchdog turns all off after 20s quiet
+How do I start Gemy with camera + voice from Control Center? How does wave detection work in greeter.py vision_loop? One paragraph — OpenCV only, not Gemma.
+```
+
+---
+
+**5A — Full vibes**
+
+```
+Walk me through CODE-JAM Round 4: insult, sad, yes, no, joke, math (7 times 6), turn off. What hardware for each?
 ```
 
 ---
@@ -70,13 +59,7 @@ Create board/python/greeter.py named Gemy:
 **6A — Control Center**
 
 ```
-Create windows/hub/coralboard-hub.ps1 WinForms Control Center:
-- Button 0 red: Clean up board (runs windows/setup/cleanup-board.ps1)
-- Buttons: 1 internet NCM, 2 hat-gui, 3 Gemy greet-demo, 4 webrtc, 5 push images, 6 image classify, 7 Gemma voice, 8 adb shell
-- Use windows/lib/Repo.ps1 Join-RobotPath for all script paths
-- Show board connected + usb0 IP on refresh
-Create windows/hub/make-shortcut.ps1 for desktop shortcut.
-Create root-level thin .ps1 launchers that forward to windows/ scripts for backward compatibility.
+What does coralboard-hub.ps1 / Control Center do? List main buttons and when to use cleanup-board.ps1.
 ```
 
 ---
@@ -84,24 +67,15 @@ Create root-level thin .ps1 launchers that forward to windows/ scripts for backw
 **7A — Cleanup**
 
 ```
-Create windows/setup/cleanup-board.ps1: adb wait-for-device, kill wave_detect.py and greeter.py and webrtc, free /dev/video0, gpioset buzzer off, hat led all off, print clear status. Used before starting Gemy.
-Update greet-demo.ps1 to call cleanup-board first and push from board/python/.
+Give me one PowerShell command from repo root to run cleanup-board.ps1 and explain what it kills.
 ```
 
 ---
 
-**8A — Standalone USER button (optional)**
+**8A — Bonus keyword**
 
 ```
-Create board/python/gemy-watcher.py: read USER button from /dev/input/event0 (Enter key), toggle greeter.py on/off, play gemy signature on start. Add board/systemd/gemy-watcher.service and gemy-autostart.service. Create windows/setup/install-gemy-standalone.ps1 to push files and enable watcher. Document in docs/CORALBOARD-GUIDE.md.
-```
-
----
-
-**9A — Organize repo (optional)**
-
-```
-Reorganize this repo: board/python, board/shell, board/systemd, windows/hub, windows/demos, windows/setup, windows/lib/Repo.ps1, drivers/ncm, drivers/cp210x, docs/, assets/, logs/. Move files, update all paths, keep root .ps1 as forwarders. Add windows/setup/verify-repo.ps1. Update README and docs. Do not break adb push paths on the board (/home/root/greeter.py etc).
+Add keyword "you rock" -> nice mood in greeter.py (minimal diff). Push + restart steps.
 ```
 
 ---
@@ -109,7 +83,7 @@ Reorganize this repo: board/python, board/shell, board/systemd, windows/hub, win
 **10 — Reflection**
 
 ```
-I'm a non-engineer who just built Gemy. Write 3 sentences I can put in my code jam submission: what I built, one thing I learned, one surprise. Friendly tone, no jargon.
+I finished the Gemy Code Jam. Write 3 sentences for my submission: what I built, one thing I learned, one surprise. No jargon.
 ```
 
 ---
@@ -117,11 +91,17 @@ I'm a non-engineer who just built Gemy. Write 3 sentences I can put in my code j
 **Fix voice**
 
 ```
-Gemy greeter: wave triggers beep but speech never shows [ears] heard. Check for wave_detect.py holding camera, CPU starvation, and fix greeter.py load speech before camera, fps cap, cleanup-board.ps1. Apply fixes to this repo.
+Gemy: no [ears] heard after wave worked. Diagnose stale greeter, camera busy, NPU/Gemma freeze. Point me to cleanup-board.ps1 and -NoGemmaMood. Read docs/lab/04-TROUBLESHOOTING.md.
 ```
 
 **Fix buzzer stuck**
 
 ```
-The HAT buzzer is stuck on loud. Give adb commands using hat.py buzzer off and gpioset gpiochip0 6=1. Explain in one sentence why (GPIO latch).
+HAT buzzer stuck on. adb commands: hat.py buzzer off and gpioset gpiochip0 6=1. One sentence why (GPIO latch).
+```
+
+**Fix math**
+
+```
+Gemy should answer math quizzes: plus and times, yes/no, follow-up "is it equal to 42". Explain _try_math_yes_no in greeter.py.
 ```

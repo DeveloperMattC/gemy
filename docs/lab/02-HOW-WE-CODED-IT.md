@@ -118,7 +118,7 @@ See [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md).
 
 ### 3.3 Vision — wave detection
 
-> **Gemma 3 does not power the wave demo.** Vision is OpenCV motion math in `wave_detect.py` / `greeter.py` `vision_loop()`. Gemma 3 on this board is text-only and lives in `sl2610-examples/gemma_translate/` for translation demos. Full map: [07-WAVE-VISION-AND-GEMMA.md](07-WAVE-VISION-AND-GEMMA.md).
+> **Gemma 3 does not power wave detection.** Vision is OpenCV in `greeter.py` `vision_loop()`. Gemma 3 on this board is text-only (mood assist + optional `sl2610-examples/gemma_translate/`). Full map: [07-WAVE-VISION-AND-GEMMA.md](07-WAVE-VISION-AND-GEMMA.md).
 
 No ML/NPU. Algorithm per frame (on downscaled 320×240 gray):
 
@@ -174,17 +174,17 @@ The Coralboard has **2 CPU cores**. An uncapped OpenCV loop (~35 fps) starved Mo
 1. **`--fps` default 8** — sleep between frames to yield CPU.
 2. **Downscale** frames to 320×240 before processing.
 3. **Open camera before** starting speech thread (avoid init race).
-4. **`_stop_stale_demos()`** — kill leftover `wave_detect.py` / duplicate greeter holding `/dev/video0`.
+4. **`_stop_stale_demos()`** — kill duplicate `greeter.py` holding `/dev/video0`.
 5. **`greet-demo.ps1`** — `pkill` stale processes before launch.
 
 ### 3.8 Startup cleanup
 
 ```python
 def _stop_stale_demos():
-    # scan ps -ef, kill other wave_detect.py / greeter.py PIDs
+    # scan ps -ef, kill other greeter.py PIDs; cleanup-board also kills legacy wave_detect if present
 ```
 
-`wave_detect.py` is the **legacy wave-only** script with **no microphone**. If it is left running, students hear nothing — a common lab failure mode.
+**`cleanup-board.ps1`** before every Gemy start. Legacy **`wave_detect.py`** (if still on an old board image) has **no microphone** — a common lab failure mode.
 
 ---
 
@@ -207,9 +207,9 @@ One-time / per-boot fix for:
 
 Without this, `udhcpc -i usb0` fails and HuggingFace model downloads break.
 
-### 4.3 `coralboard-hub.ps1`
+### 4.3 `coralboard-hub.ps1` / Control Center
 
-WinForms **Control Center** — one button per demo, connection status, `adb shell` shortcut. Button 3 launches `greet-demo.ps1`.
+**Browser dashboard** (`http://127.0.0.1:8765/`): system status, **Start Gemy** (voice / camera+voice), HAT panel, cleanup, board log tail. PowerShell server in `windows/hub/`.
 
 ### 4.4 `hat-gui.ps1`
 
@@ -217,14 +217,15 @@ WinForms panel for manual HAT testing. **Bug fixed:** parameter named `$args` sh
 
 ---
 
-## 5. Legacy and optional components
+## 5. Optional / not in this repo
 
-| File | Status |
+| Item | Notes |
 |------|--------|
-| `wave_detect.py` | Superseded by `greeter.py` vision; no speech |
-| `webrtc-stream.sh` + `webrtc-view.ps1` | Browser video stream; separate extension |
-| `gemma_text.py` | Minimal Gemma text translation |
-| `connect-gemma.ps1` | Official voice translation demo launcher |
+| `sl2610-examples/gemma_translate/` | On-board Gemma 3 **translation** demo (not Gemy) |
+| `sl2610-examples/demos/webrtc` | Optional browser camera stream on board |
+| Legacy `wave_detect.py` on old board images | Superseded by `greeter.py` vision; no speech |
+
+**Removed from this repo:** standalone `wave_detect.py`, `wave-demo.ps1`, `connect-gemma.ps1`, `webrtc-view.ps1`, `gemma_text.py`.
 
 ---
 
@@ -239,7 +240,7 @@ greeter.py
         └── Moonshine STT
 
 greet-demo.ps1
-  ├── adb → push greeter.py, hat.py
+  ├── adb → push greeter.py, hat.py, gemma_mood*.py, gemy_stability.py, gemy_diag.py
   └── adb shell → venv python greeter.py
 ```
 

@@ -1,13 +1,13 @@
 # Fix-it prompts (when something breaks)
 
-Paste these into the AI when a step fails. Stay in the **gemy** repo folder.
+Paste into the AI. Stay in the **gemy** repo folder.
 
 ---
 
 ## ADB does not see the board
 
 ```
-adb devices shows nothing or unauthorized. I'm on Windows 11 with Coralboard USB-C. Give me a short checklist: cable, wait for boot, adb kill-server, drivers, and what "unauthorized" means. Commands only.
+adb devices shows nothing or unauthorized on Windows 11 + Coralboard USB-C. Short checklist: cable, boot wait, adb kill-server, drivers. Commands only.
 ```
 
 ---
@@ -15,7 +15,7 @@ adb devices shows nothing or unauthorized. I'm on Windows 11 with Coralboard USB
 ## No internet on the board (udhcpc fails)
 
 ```
-udhcpc -i usb0 on Coralboard says no lease. Point me to install-ncm-signed.ps1 in this repo and explain in plain English what NCM and Internet Connection Sharing do. I may need admin.
+udhcpc -i usb0 says no lease. Point me to install-ncm-signed.ps1 and explain NCM/ICS in plain English.
 ```
 
 ---
@@ -23,15 +23,15 @@ udhcpc -i usb0 on Coralboard says no lease. Point me to install-ncm-signed.ps1 i
 ## Buzzer will not stop
 
 ```
-The HAT buzzer is stuck on loud. Give adb commands using hat.py buzzer off and gpioset gpiochip0 6=1. Explain in one sentence why (GPIO latch).
+HAT buzzer stuck ON. adb commands: hat.py buzzer off and gpioset gpiochip0 6=1. One sentence on GPIO latch.
 ```
 
 ---
 
-## “Does Gemma watch the camera for waves?”
+## “Does Gemma watch the camera?”
 
 ```
-Explain in plain English: wave_detect.py and greeter.py vision use OpenCV motion only — no Gemma 3, no training. Gemma 3 on Coralboard is text-only in sl2610-examples/gemma_translate for translation. Point me to docs/lab/07-WAVE-VISION-AND-GEMMA.md in this repo.
+Explain: greeter.py vision_loop uses OpenCV motion only — no Gemma, no training. Gemma 3 is text-only (mood assist + optional sl2610-examples/gemma_translate). Point to docs/lab/07-WAVE-VISION-AND-GEMMA.md.
 ```
 
 ---
@@ -39,7 +39,15 @@ Explain in plain English: wave_detect.py and greeter.py vision use OpenCV motion
 ## Voice does not work but waving works
 
 ```
-Gemy greeter: wave triggers beep but speech never shows [ears] heard. Check for wave_detect.py holding camera, CPU starvation, and fix greeter.py load speech before camera, fps cap, cleanup-board.ps1. Apply fixes to this repo.
+Gemy: wave works, no [ears] heard. Stale greeter or busy /dev/video0. Fix with cleanup-board.ps1, greeter speech-before-camera, --fps 5, -NoGemmaMood if frozen.
+```
+
+---
+
+## Hung at listen_wait after speaking
+
+```
+Gemy log stops at [ears] listen_wait Moonshine listen_once. Explain gemy_stability listen timeout (60s), stuck guard, cleanup-board.ps1 restart.
 ```
 
 ---
@@ -47,37 +55,29 @@ Gemy greeter: wave triggers beep but speech never shows [ears] heard. Check for 
 ## Camera photo is black
 
 ```
-hat.py photo on Coralboard OV5647 is black. Fix by setting exposure and gain on /dev/v4l-subdev2 after stream starts. Update board/python/hat.py.
+OV5647 photo black. Fix exposure/gain on /dev/v4l-subdev2 after stream starts in hat.py.
 ```
 
 ---
 
-## AI put files in the wrong place
+## Control Center / hub issues
 
 ```
-Reorganize files to match this repo standard: board/python for greeter.py hat.py, windows/demos for PowerShell launchers, windows/setup for cleanup-board.ps1. Fix paths and root forwarders. Run verify-repo.ps1 logic.
-```
-
----
-
-## Hub button does nothing
-
-```
-coralboard-hub.ps1 buttons don't launch scripts. Fix Join-RobotPath in windows/lib/Repo.ps1 and hub script paths. Root forwarders should call windows/ scripts.
+coralboard-hub.ps1 or browser Control Center not starting Gemy. Check HubServer.ps1, Join-RobotPath in Repo.ps1, greet-demo.ps1 paths.
 ```
 
 ---
 
-## Speech hears me but wrong mood
+## Wrong mood / math wrong
 
 ```
-Moonshine mis-transcribes. Widen GEMY_NAMES and FUNNY NICE MEAN keyword lists in greeter.py for jam demo. Show me what you changed.
+Moonshine mis-hears or math quiz returns neutral. Explain _try_math_yes_no (plus, times, follow-up). Widen keyword lists in greeter.py.
 ```
 
 ---
 
-## Start over on the board
+## Start over
 
 ```
-Run full cleanup: kill greeter wave_detect webrtc, free video0, buzzer off, leds off. Give me one PowerShell command from repo root using cleanup-board.ps1
+Full board reset from repo root: cleanup-board.ps1 — one PowerShell command.
 ```

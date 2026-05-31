@@ -9,8 +9,8 @@ Use this when packaging the **gemy** repo (especially `docs/lab/`) for review.
 - [ ] `docs/lab/01-STUDENT-LAB.md` — technical track
 - [ ] `docs/lab/08-GEMY-MOODS-AND-REACTIONS.md` — current mood/reaction reference
 - [ ] `AGENTS.md` — instructions for AI agents
-- [ ] `docs/04-TROUBLESHOOTING.md`
-- [ ] `docs/05-INSTRUCTOR-GUIDE.md` — filled author/org fields
+- [ ] `docs/lab/04-TROUBLESHOOTING.md`
+- [ ] `docs/lab/05-INSTRUCTOR-GUIDE.md` — filled author/org fields
 - [ ] `docs/lab/ai-prompt-walkthrough/` — non-engineer prompt path
 - [ ] `board/python/`, `windows/` — source (see repo README)
 
@@ -33,7 +33,7 @@ These remain in the parent `robot/` repo — link or bundle separately if requir
 ## Zip command (PowerShell)
 
 ```powershell
-Compress-Archive -Path "gemy" -DestinationPath "gemy-coralboard-lab.zip" -Force
+Compress-Archive -Path "gemy" -DestinationPath "gemy.zip" -Force
 ```
 
 ## Codelab conversion tips

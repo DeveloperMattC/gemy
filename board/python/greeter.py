@@ -338,11 +338,73 @@ _MATH_NO_SNIPPETS = (
 )
 _RE_PLUS_EQ = re.compile(
     r"(?:(?:is|does|are|can)\s+)?(\w+)\s+plus\s+(\w+)\s+"
-    r"(?:equal(?:s)?(?:\s+to)?|is|are|make(?:s)?)\s+(\w+)",
+    r"(?:equal(?:s)?(?:\s+to)?|is|are|make(?:s)?)\s+(.+?)\s*$",
 )
 _RE_PLUS_TAIL = re.compile(
-    r"(?:is|does|are|can)\s+(\w+)\s+plus\s+(\w+)\s+(\w+)\s*$",
+    r"(?:is|does|are|can)\s+(\w+)\s+plus\s+(\w+)\s+(.+?)\s*$",
 )
+_RE_TIMES_EQ = re.compile(
+    r"(?:(?:is|does|are|can)\s+)?(\w+)\s+(?:times|multiplied by)\s+(\w+)\s+"
+    r"(?:equal(?:s)?(?:\s+to)?|is|are|make(?:s)?)\s+(.+?)\s*$",
+)
+_RE_TIMES_TAIL = re.compile(
+    r"(?:is|does|are|can)\s+(\w+)\s+(?:times|multiplied by)\s+(\w+)\s+(.+?)\s*$",
+)
+_RE_MATH_FOLLOWUP = re.compile(
+    r"(?:is\s+)?(?:it|that|the answer)\s+"
+    r"(?:(?:equal(?:s)?(?:\s+to)?)|is)\s+(.+?)\s*$",
+)
+_RE_MATH_FOLLOWUP_SHORT = re.compile(
+    r"^(?:is\s+)?(?:it|that)\s+(.+?)\s*$",
+)
+
+# Last correct numeric answer from a parsed quiz (for "is it equal to …" follow-ups).
+_math_last_answer = None
+
+
+def _clear_math_context():
+    global _math_last_answer
+    _math_last_answer = None
+
+
+def _remember_math_answer(a, b, op):
+    global _math_last_answer
+    if op == "+":
+        _math_last_answer = a + b
+    elif op == "*":
+        _math_last_answer = a * b
+
+
+def _eval_math_triple(a, b, c, op):
+    if a is None or b is None or c is None:
+        return None
+    _remember_math_answer(a, b, op)
+    if op == "+":
+        return "yes" if (a + b) == c else "no"
+    if op == "*":
+        return "yes" if (a * b) == c else "no"
+    return None
+
+
+def _parse_math_match(m, op):
+    a = _token_to_int(m.group(1))
+    b = _token_to_int(m.group(2))
+    c = _parse_spoken_number(m.group(3))
+    return _eval_math_triple(a, b, c, op)
+
+
+def _try_math_followup(n):
+    global _math_last_answer
+    if _math_last_answer is None:
+        return None
+    for pat in (_RE_MATH_FOLLOWUP, _RE_MATH_FOLLOWUP_SHORT):
+        m = pat.search(n)
+        if not m:
+            continue
+        c = _parse_spoken_number(m.group(1))
+        if c is not None:
+            return "yes" if c == _math_last_answer else "no"
+    return None
 
 
 def _token_to_int(tok):
@@ -353,29 +415,66 @@ def _token_to_int(tok):
     return _NUM_WORD.get(tok)
 
 
+def _parse_spoken_number(phrase):
+    """Parse '42', 'seven', or 'forty two' style answers."""
+    if not phrase:
+        return None
+    p = phrase.strip().lower()
+    if p.isdigit():
+        return int(p)
+    one = _token_to_int(p)
+    if one is not None:
+        return one
+    parts = p.split()
+    if len(parts) != 2:
+        return None
+    tens_w, ones_w = parts
+    tens_map = {
+        "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+        "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+    }
+    if tens_w not in tens_map:
+        return None
+    ones = _token_to_int(ones_w)
+    if ones is None or ones < 0 or ones > 9:
+        return None
+    return tens_map[tens_w] + ones
+
+
 def _looks_like_math_quiz(low):
     n = _norm_heard(low)
-    return " plus " in n or " plus" in n
+    if any(x in n for x in (" plus ", " plus", " times ", " multiplied by", " multiply ")):
+        return True
+    if _math_last_answer is not None and re.search(
+            r"\b(it|that|the answer)\b", n):
+        return True
+    return False
 
 
 def _try_math_yes_no(low, words):
-    """Simple addition quizzes -> yes/no without calling Gemma."""
+    """Simple +/-/* quizzes -> yes/no without calling Gemma."""
     n = _norm_heard(low)
+    follow = _try_math_followup(n)
+    if follow:
+        return follow
     for snippet in _MATH_NO_SNIPPETS:
         if snippet in n:
             return "no"
     for snippet in _MATH_YES_SNIPPETS:
         if snippet in n:
             return "yes"
-    for pat in (_RE_PLUS_EQ, _RE_PLUS_TAIL):
+    for pat, op in (
+        (_RE_PLUS_EQ, "+"),
+        (_RE_PLUS_TAIL, "+"),
+        (_RE_TIMES_EQ, "*"),
+        (_RE_TIMES_TAIL, "*"),
+    ):
         m = pat.search(n)
         if not m:
             continue
-        a = _token_to_int(m.group(1))
-        b = _token_to_int(m.group(2))
-        c = _token_to_int(m.group(3))
-        if a is not None and b is not None and c is not None:
-            return "yes" if (a + b) == c else "no"
+        ans = _parse_math_match(m, op)
+        if ans:
+            return ans
     return None
 
 
@@ -600,6 +699,7 @@ def classify_utterance(text, low, words, greet_set, joke_tracker=None, gemma_moo
     if wants_turn_off(low, words, text):
         if joke_tracker is not None:
             joke_tracker.reset()
+        _clear_math_context()
         return "off"
     if _is_yes(low, words):
         if joke_tracker is not None:

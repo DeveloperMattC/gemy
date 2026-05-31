@@ -31,7 +31,9 @@ When editing Gemy code or Windows launchers, Cursor also loads:
 
 **Moods:** `gemy`, `greet`, `funny`, `nice`, `mean`, `sad`, `yes`, `no`, `neutral`, `off`.
 
-**Classification:** keywords first → optional Gemma assist → `resolve_reaction_kind()` (unknown → neutral).
+**Classification:** keywords + math → optional Gemma assist → `resolve_reaction_kind()` (unknown → neutral).
+
+**Stack:** Python on board; PowerShell + browser Control Center on Windows. **Gemma 3 270M** only (not Gemma 4 on this hardware).
 
 ---
 
@@ -65,8 +67,9 @@ On board, success line: **`[ears] listening (moods: …)`**.
 
 | Doc | Audience |
 |-----|----------|
+| [docs/lab/CODE-JAM.md](docs/lab/CODE-JAM.md) | **Primary student path** (Code Jam rounds) |
 | [docs/lab/08-GEMY-MOODS-AND-REACTIONS.md](docs/lab/08-GEMY-MOODS-AND-REACTIONS.md) | Moods, Gemma, reactions — **source of truth** |
-| [docs/lab/01-STUDENT-LAB.md](docs/lab/01-STUDENT-LAB.md) | Student steps |
+| [docs/lab/01-STUDENT-LAB.md](docs/lab/01-STUDENT-LAB.md) | Technical student steps |
 | [docs/lab/02-HOW-WE-CODED-IT.md](docs/lab/02-HOW-WE-CODED-IT.md) | Implementation |
 | [docs/lab/03-ARCHITECTURE.md](docs/lab/03-ARCHITECTURE.md) | Diagrams |
 | [docs/lab/04-TROUBLESHOOTING.md](docs/lab/04-TROUBLESHOOTING.md) | Fixes |

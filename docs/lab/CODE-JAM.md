@@ -218,6 +218,7 @@ Say each line. Tick when the board matches:
 | 5 | "No way" | no | **Two red** beeps |
 | 6 | Chicken joke + punchline | funny | Rainbow + chatter |
 | 7 | "Gemy turn off" | off | Goodbye, exits |
+| 8 | "Is 7 times 6 equal to 44?" → "is it equal to 42?" | no → **yes** | Math quiz |
 
 Full reference: [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md)
 

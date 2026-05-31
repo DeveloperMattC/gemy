@@ -93,6 +93,7 @@ Test matrix (same as [CODE-JAM.md](CODE-JAM.md) Round 4):
 | You are stupid | mean + red |
 | Nobody likes you | sad + blue |
 | Yeah / no way | yes / no |
+| Is 7 times 6 equal to 44? → is it equal to 42? | no → yes |
 
 Wave and hand-up when camera mode is on.
 

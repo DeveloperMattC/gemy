@@ -35,15 +35,18 @@ Vision (wave / hand-up) always uses **greet** (rainbow + beep).
 1. Turn off?        → off
 2. Yes?             → yes
 3. No?              → no
-4. Joke in progress?→ funny (knock-knock / riddle tracker)
-5. Name "Gemy"?     → gemy
-6. Keywords         → mean, sad, funny, nice, greet
-7. Small-talk       → "how are you", "great to hear", etc. → greet / nice (no Gemma)
-8. Gemma assist     → only if --gemma-mood and steps 6–7 found nothing
-9. Else             → neutral
+4. Math quiz?       → yes/no (plus, times, “is it equal to …” follow-up)
+5. Joke in progress?→ funny (knock-knock / riddle tracker)
+6. Name "Gemy"?     → gemy
+7. Keywords         → mean, sad, funny, nice, greet
+8. Small-talk       → "how are you", "great to hear", etc. → greet / nice (no Gemma)
+9. Gemma assist     → only if --gemma-mood and steps 7–8 found nothing
+10. Else            → neutral
 ```
 
-**Gemma never runs before keywords.** That keeps jokes and insults fast and avoids NPU work on clear phrases.
+**Math examples (no Gemma):** “is one plus one two” → yes; “is 7 times 6 equal to 44” → no; then “is it equal to 42” → yes.
+
+**Gemma never runs before keywords or math rules.** That keeps jokes, insults, and quizzes fast.
 
 ---
 
@@ -90,11 +93,12 @@ See `.cursor/rules/gemy-hardware-safety.mdc` and `.cursor/rules/coralboard-stabi
 
 | File | Role |
 |------|------|
-| `board/python/greeter.py` | Main app: vision, speech loop, keywords, reactions |
+| `board/python/greeter.py` | Main app: vision, speech loop, keywords, math, reactions |
 | `board/python/hat.py` | Buzzer, LEDs, `gemy_funny`, `gemy_greet`, … |
 | `board/python/gemma_mood.py` | Prompt, `normalize_mood_label`, subprocess worker |
 | `board/python/gemma_mood_worker.py` | Isolated Gemma process |
-| `windows/demos/greet-demo.ps1` | Push scripts + start greeter |
+| `board/python/gemy_stability.py` | NPU rules, listen/Gemma timeouts, stuck recovery |
+| `windows/demos/greet-demo.ps1` | Push 6 Python files + start greeter |
 | `windows/hub/` | Control Center (browser UI) |
 | `windows/lib/GemyFeatures.ps1` | Boot autostart flag (default **off**) |
 

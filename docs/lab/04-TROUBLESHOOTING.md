@@ -5,22 +5,21 @@
 ### Symptom
 Waving might work, but speaking does nothing. No `[ears] heard:` lines in terminal.
 
-### Most common cause: wrong demo running
-**`wave_detect.py` has no microphone.** Check:
+### Most common cause: stale process or wrong session
+Another **`greeter.py`** instance or a leftover demo may hold the camera or mic path.
 
 ```powershell
-adb shell ps -ef | findstr wave_detect
+powershell -ExecutionPolicy Bypass -File cleanup-board.ps1
+```
+
+Then launch **`greet-demo.ps1`** or Control Center → **Start Gemy — voice**.
+
+Check:
+
+```powershell
+adb shell ps -ef | findstr greeter
 adb shell fuser /dev/video0
 ```
-
-Fix:
-
-```powershell
-adb shell pkill -9 -f wave_detect.py
-adb shell pkill -9 -f /home/root/greeter.py
-```
-
-Then launch **`greet-demo.ps1`**, not `wave-demo.ps1`.
 
 ### Speech model still loading
 Wait until terminal shows:
@@ -29,18 +28,18 @@ Wait until terminal shows:
 [ears] listening (moods: ...)
 ```
 
-First start: **10–20 seconds** for Moonshine. With Gemma assist, unclear phrases are capped at **8 s** then neutral.
+First start: **10–20 seconds** for Moonshine. Gemma assist (if on) is capped at **5 s** per phrase; then neutral.
 
-**Freeze debugging:** PC `greet-demo.ps1` enables **`[diag]`** logging (phase + 20 s watchdog). Copy the **last `[diag]` line** before the red heartbeat stopped — it shows whether we were stuck in `listen_wait`, `gemma_assist`, `react_*`, etc.
+**Freeze debugging:** watch **`[diag]`** lines — last phase before hang (`listen_wait`, `gemma_assist`, `react_*`). Red **session heartbeat** should blink ~every 1.6 s.
 
-**`gemma_classify bad_line='[gemma] NPU: ...'`** — worker load logs leaked to stdout; greeter thought Gemma was done but the worker kept loading on the NPU (next listen freezes). Fixed: worker logs go to stderr; junk stdout kills the worker; short words like "Go" skip Gemma.
+### Hung at `listen_wait`
+Moonshine can block up to **60 s**; stability then resets the mic. If stuck, run **`cleanup-board.ps1`** and restart. Try **`greet-demo.ps1 -NoGemmaMood`** to isolate NPU issues.
 
 ### Camera starving speech (2 CPU cores)
-If `[ears] on` appears but no transcripts under load:
+If `[ears] listening` appears but no transcripts under load:
 
-- Do not raise `--fps` above ~10.
+- Keep `--fps` at **5** (default) or lower.
 - Test mic-only: `greet-demo.ps1 -NoVision`
-- Confirm Gemma voice demo works alone (`connect-gemma.ps1`)
 
 ### Camera held by another process
 ```
@@ -48,7 +47,7 @@ ERROR: could not open camera /dev/video0
 [vision] OFF (camera busy or missing). Voice still works.
 ```
 
-Kill holder: `adb shell fuser /dev/video0` then kill that PID.
+Run **`cleanup-board.ps1`** or kill the PID from `adb shell fuser /dev/video0`.
 
 ---
 
@@ -61,7 +60,9 @@ gpioset gpiochip0 6=1
 python3 /home/root/hat.py buzzer off
 ```
 
-Root cause: GPIO latch — always use updated `hat.py` that drives line HIGH in `finally`.
+Or Control Center → **Stop buzzer & reset board**.
+
+Root cause: GPIO latch — use updated `hat.py` (always drives line HIGH in `finally`).
 
 ---
 
@@ -73,23 +74,21 @@ After stream starts, set exposure on subdev:
 v4l2-ctl -d /dev/v4l-subdev2 --set-ctrl=exposure=740,analogue_gain=1023
 ```
 
-Or run greeter with `--gain 600` in brighter room.
+Or run greeter with `--gain 600` in a brighter room.
 
 ---
 
 ## `adb` not found
 
-Install Platform Tools, **open new terminal**:
-
 ```powershell
 winget install Google.PlatformTools
 ```
 
+Open a **new** terminal.
+
 ---
 
 ## `udhcpc: no lease`
-
-Host NCM/ICS not active. Run as admin:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install-ncm-signed.ps1
@@ -101,25 +100,21 @@ Then on board: `udhcpc -i usb0`
 
 ## Terminal shows heard text but wrong reaction
 
-Moonshine mis-hears words. Check actual transcript in:
+Check the transcript:
 
 ```
 [ears] heard: '...' -> funny
 ```
 
-Extend keyword sets in `greeter.py` (`FUNNY`, `NICE`, `MEAN`, `SAD`, `_YES_PHRASES`, …). See [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md).
+Moonshine mis-hears words — extend keyword lists in `greeter.py`. Math: supports **plus**, **times**, and follow-up **“is it equal to …”** — see [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md).
 
 ---
 
 ## Board frozen / red heartbeat stopped
 
-**Symptom:** No reactions; red **heartbeat** LED (slow blink during load) stopped for a long time; log stuck on `[gemma-worker] loading…` or NPU error.
-
-**Fix:**
-
-1. Control Center → **Stop buzzer and reset board** or `cleanup-board.ps1`.
-2. Restart with keywords only: `greet-demo.ps1 -NoGemmaMood`.
-3. Do not use `--gemma-mood-serial` (disabled in code — causes Moonshine + Gemma NPU fight).
+1. **`cleanup-board.ps1`** or Control Center reset.
+2. Restart with **`greet-demo.ps1 -NoGemmaMood`** (keywords only).
+3. Do not use **`--gemma-mood-serial`** (disabled — NPU freeze).
 
 See `.cursor/rules/coralboard-stability-first.mdc`.
 
@@ -127,47 +122,30 @@ See `.cursor/rules/coralboard-stability-first.mdc`.
 
 ## Joke heard but no rainbow
 
-**Cause (fixed in current `hat.py`):** `r2d2` and `rainbow` used to run in **parallel**; buzzer held the GPIO lock so LEDs never swept.
-
-**Fix:** Push latest `hat.py` + `greeter.py` (`gemy_funny()` runs sound + rainbow in one lock). Test:
-
-```bash
-python3 /home/root/hat.py rainbow
-```
+Push latest **`hat.py`** + **`greeter.py`**. Reactions must use **`hat.gemy_funny()`** (one GPIO lock, sequential sound + LED).
 
 ---
 
 ## Gemma returned weird mood / crash
 
-Current code maps unknown labels to **neutral** via `mood_for_reaction` and `resolve_reaction_kind`. If you still see crashes, update `gemma_mood.py` and `greeter.py` from the repo.
+Unknown labels map to **neutral** via `mood_for_reaction` / `resolve_reaction_kind`. Update from repo if crashes persist.
 
 ---
 
-## Hub button does nothing
+## Control Center does nothing
 
-- Click **Refresh connection** — board must show connected.
-- Run hub script directly:
+- Leave the PowerShell hub window open; browser at `http://127.0.0.1:8765/`
+- Click **Refresh** — board must show connected
+- Run directly: `powershell -ExecutionPolicy Bypass -File coralboard-hub.ps1`
+
+---
+
+## Quick diagnostic (instructor)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File coralboard-hub.ps1
-```
-
----
-
-## WebRTC stream fails
-
-- Port **8090** serves viewer (8080 used by `swupdate`).
-- Signalling on **8443**.
-- See `webrtc-view.ps1` and `webrtc-stream.sh status`.
-
----
-
-## Quick diagnostic script (instructor)
-
-```powershell
-adb shell ps -ef | findstr -i "greeter wave_detect gemma"
+adb shell ps -ef | findstr -i "greeter gemma"
 adb shell fuser /dev/video0
-adb shell /home/root/sl2610-examples/.venv/bin/python3 -c "import sounddevice as sd; print(sd.query_devices())"
+adb shell tail -20 /home/root/gemy.log
 ```
 
-Expected for voice lab: **`greeter.py` running**, camera free or owned by that greeter only, ALSA devices listed.
+Expected: one **`greeter.py`**, camera owned by that greeter or free.

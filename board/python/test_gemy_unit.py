@@ -90,6 +90,13 @@ class TestKeywordClassify(unittest.TestCase):
         self.assertEqual(u("one plus one equal to five"), "no")
         self.assertEqual(greeter._try_math_yes_no(*greeter._words_from_text(
             "two plus two equals four")), "yes")
+        self.assertEqual(u("is seven times six equal to forty four"), "no")
+        self.assertEqual(u("is 7 times 6 equal to 42"), "yes")
+        greeter._try_math_yes_no(*greeter._words_from_text(
+            "is seven times six equal to forty four"))
+        self.assertEqual(u("is it equal to forty two"), "yes")
+        self.assertEqual(u("is it equal to 43"), "no")
+        greeter._clear_math_context()
 
     def test_resolve_reaction_kind(self):
         self.assertEqual(greeter.resolve_reaction_kind("funny"), "funny")

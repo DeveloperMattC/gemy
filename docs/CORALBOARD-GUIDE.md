@@ -44,10 +44,10 @@ Actions:
 
 Other Synaptics demos live in `/home/root/sl2610-examples` on the board if installed.
 
-**Gemy is one click:** it pushes `greeter.py`, `hat.py`, and `gemma_mood.py`,
-runs cleanup (stops old `wave_detect` / greeter, frees the camera), then starts
-Gemy in a terminal. Wait until you see **`[ears] listening`** (~30–60 s first time).
-Use **0. Clean up board** only if something is stuck after you stop Gemy.
+**Gemy is one click:** it pushes `greeter.py`, `hat.py`, `gemma_mood.py`, `gemma_mood_worker.py`, `gemy_stability.py`, and `gemy_diag.py`,
+runs cleanup (stops old greeter / legacy demos, frees the camera), then starts
+Gemy in a terminal. Wait until you see **`[ears] listening`** (~15–30 s first time).
+Use **Stop buzzer & reset board** if something is stuck after you stop Gemy.
 
 ---
 
@@ -163,59 +163,33 @@ cat /home/root/sl2610-examples/<DemoFolder>/README.md
 
 ---
 
-## Gemma 3 LLM translation demo (already set up)
+## Gemma 3 translation demo (on board — optional)
 
-> **Not used for wave detection.** Waving at Gemy uses OpenCV motion math in `greeter.py` only.
-> Gemma 3 here is **text-only** (translation). Where each “brain” lives:
-> [docs/lab/07-WAVE-VISION-AND-GEMMA.md](lab/07-WAVE-VISION-AND-GEMMA.md).
+> **Not used for Gemy or wave detection.** Waving uses OpenCV in `greeter.py` only.
+> Map of all “brains”: [docs/lab/07-WAVE-VISION-AND-GEMMA.md](lab/07-WAVE-VISION-AND-GEMMA.md).
 
-This translates English → Spanish/French/Italian using **Gemma 3 270M** on the NPU.
-The models and PortAudio are already installed. Two ways to run it:
-
-### Where translation “behavior” is defined
-
-Prompt templates and `GemmaTranslationService` live on the board (not in this repo):
+Translates English → Spanish/French/Italian using **Gemma 3 270M** on the NPU.
+Prompts and CLI live **on the board** (not in this repo):
 
 ```
-/home/root/sl2610-examples/gemma_translate/translation.py   # builds instruct prompts
-/home/root/sl2610-examples/gemma_translate/common_args.py   # language menu
+/home/root/sl2610-examples/gemma_translate/
+  translation.py
+  cli_translate.py
+  common_args.py
 ```
 
-Our helper [`board/python/gemma_text.py`](../board/python/gemma_text.py) calls that service for one-shot text tests.
-
-### A) Text only (no microphone) — quick test
+### Quick test (adb shell)
 
 ```bash
 cd /home/root/sl2610-examples && source .venv/bin/activate
 cd gemma_translate
-python3 gemma_text.py "Hello, how are you today?" Spanish
-# -> Translation: "Hola, ¿cómo estás hoy?"
-python3 gemma_text.py Goodbye Italian
-# -> Translation: "Ciao"
+python3 cli_translate.py
 ```
 
-(`gemma_text.py` is a small helper script; the second argument is the target
-language — `Spanish`, `French`, or `Italian`. The text demo actually accepts
-any language name, since the prompt is generic.)
+Pick the HAT mic (usually device `0`), choose a language, speak English.
 
-### B) Voice (uses the HAT microphone)
-
-From Windows, open the ready-made interactive window:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File connect-gemma.ps1
-```
-
-Then: pick the audio input device (the HAT mic = the `klamath`/dmic card, usually `0`),
-press `1` (Spanish), `2` (French), or `3` (Italian), and speak a short English phrase.
-You can also start in a language directly with `--language Italian`.
-
-> To add more languages, edit `gemma_translate/common_args.py` on the board and
-> add an entry to the `LANGUAGES` dict, e.g. `"4": LanguageOption("German", "German")`.
-
-> Note: this demo upgrades `torq-runtime` to `2.0.0a1`. The image-classification
-> demo used `1.5.1`. If you switch back to image classification and it errors,
-> reinstall its deps: `pip install -r requirements.txt` from the repo root.
+> To add languages, edit `common_args.py` on the board.
+> Switching demos may change `torq-runtime` versions — reinstall demo `requirements.txt` if another NPU demo breaks.
 
 ---
 
@@ -332,21 +306,15 @@ export WAYLAND_DISPLAY=wayland-1
 
 ## Transferring files (no network needed)
 
-### Easy way: drag-and-drop GUI (upload images to `samples/`)
+### Easy way: adb push to `samples/`
 
-A small drag-and-drop window is provided to copy images from your PC into the
-board's `samples/` folder. Open it with:
+Use **`adb push`** from Windows (no separate GUI script in this repo):
 
 ```powershell
-powershell -STA -ExecutionPolicy Bypass -File push-gui.ps1
+adb push .\myphoto.jpg /home/root/sl2610-examples/samples/
 ```
 
-> The `-STA` flag is required (drag-and-drop won't work without it), so a plain
-> double-click is not enough.
-
-Then just drag image files onto the blue drop area. Each file lands in
-`/home/root/sl2610-examples/samples/` on the board. Afterwards, classify it from
-the board shell (replace the filename):
+Then classify from the board shell (replace the filename):
 
 ```bash
 python3 classification.py --model ../models/mbv2.vmfb --image ../samples/YOURFILE.jpg --labels labels.json --device torq
@@ -505,11 +473,9 @@ Or directly on the board (needs the venv python for OpenCV + sounddevice):
 # --fps 12   (vision frame-rate cap; keep it low so the mic gets CPU)
 ```
 
-> **If it stops reacting to your voice:** run **`cleanup-board.ps1`** or hub
-> button **0** first. `wave_detect.py` has no mic and blocks the camera. The
-> greeter loads speech **before** the camera loop and caps vision at ~5 fps
-> (`--fps`). Every phrase you say should get at least a **neutral** beep + blue
-> LED (1 s cooldown). Watch the terminal for `[ears] heard: ...` lines.
+> **If it stops reacting to your voice:** run **`cleanup-board.ps1`** or Control Center
+> **Stop buzzer & reset board**. The greeter loads speech **before** the camera loop and caps vision at ~5 fps
+> (`--fps`). Every phrase should get at least a **neutral** reaction (1 s cooldown). Watch for `[ears] heard:` lines.
 
 First start takes ~10-20 s while the speech model loads; with both on it runs
 ~35 fps. How it works: vision runs in the main thread (frame differencing for the
@@ -520,13 +486,9 @@ routes through one shared `react(kind)` dispatcher with a 3 s cooldown, and the 
 + buzzer parts of each reaction play at the same time. Buzzer/LED/camera/mic are
 always released on exit.
 
-> The original wave-only `wave_detect.py` / `wave-demo.ps1` are still on the board if
-> you want just the camera trigger.
->
 > Can Gemma 3 do this from live video? **No.** The board's `gemma-3-270m-it` is
-> **text-only** (and no Gemma 3 model does video). For vision use the NPU models
-> (`mbv2` classify, `yolov8*` detect). Simple motion like waving is best done with
-> OpenCV, as here.
+> **text-only**. **Gemma 4 does not run on this board** (2 GB RAM). For NPU vision use bundled
+> classify/detect demos. Waving uses OpenCV in `greeter.py`, as here.
 
 ### Does the board's Linux have a GUI?
 
@@ -537,36 +499,9 @@ starts when a **physical display** is attached to the board's DPI/MIPI connector
 (see `coral-boardguide.md`). You **cannot** see the Weston desktop over USB/`adb`
 — it renders to the panel, not to your PC.
 
-#### View a live video stream in your browser (no monitor needed)
+#### Optional: WebRTC browser stream (on board)
 
-The board ships a **WebRTC** stack (`gst-webrtc-signalling-server` + the
-`webrtcsink` GStreamer element + the web client in `/home/root/demos/webrtc`).
-You can stream video to your PC's browser over the USB link. A helper sets up all
-the pieces:
-
-```powershell
-# Windows — test pattern (proves it works), or "cam" for the HAT camera:
-powershell -ExecutionPolicy Bypass -File webrtc-view.ps1
-powershell -ExecutionPolicy Bypass -File webrtc-view.ps1 cam
-powershell -ExecutionPolicy Bypass -File webrtc-view.ps1 stop
-```
-
-It opens `http://<board-usb0-ip>:8090/` (e.g. `http://192.168.137.14:8090/`).
-In the page, **click the `coralboard-test` (or `coralboard-camera`) button** in the
-side list to start playing the stream.
-
-What the helper runs on the board (via `/home/root/webrtc-stream.sh`):
-1. `gst-webrtc-signalling-server` — WebSocket signalling on `:8443`.
-2. `python3 -m http.server 8090` serving the viewer page (port **8090** because
-   **8080 is taken by `swupdate`** on this board).
-3. A producer pipeline: `videotestsrc`/`v4l2src ... ! webrtcsink meta="meta,name=..."`.
-
-Notes:
-- Manage/inspect from the board directly: `sh /home/root/webrtc-stream.sh status`
-  (or `stop`). Logs are in `/tmp/webrtc/`.
-- ICE connects directly over the USB subnet (host candidate `192.168.137.x`); if
-  internet sharing is on, STUN reflexive candidates also work.
-- `cam` streams the OV5647 — it may look dark (same sensor caveat as `hat.py photo`).
+Some images include WebRTC under `/home/root/sl2610-examples/demos/webrtc` (not launched from this repo). Use Synaptics docs or `adb shell` to run signalling on `:8443` and viewer on `:8090` if you need a browser camera stream without Gemy.
 
 ### Reboot / power
 
