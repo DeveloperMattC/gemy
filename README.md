@@ -8,6 +8,8 @@
 [![Host](https://img.shields.io/badge/Host-Windows%2010%2F11-0078D6)](docs/CORALBOARD-GUIDE.md)
 [![Jam](https://img.shields.io/badge/Start-CODE--JAM-green)](docs/lab/CODE-JAM.md)
 
+**Demo video:** [Watch Gemy on Coralboard (Google Photos)](https://photos.google.com/share/AF1QipMbPbwXUzknBdhTQ45QUKH_kgF2tNoz5nDwCJDY639jZIquuocTetWdLV-zYc-Jpw?key=U3JZTWpfUi1adk1BeDI4dE1vZjY0UkZXVHg1aHNB) — public shared album with voice, moods, and LED/buzzer reactions.
+
 ---
 
 ## Start here
