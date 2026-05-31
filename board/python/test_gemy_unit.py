@@ -12,13 +12,13 @@ from unittest import mock
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
-# greeter imports hat (GPIO); mock so tests run on Windows.
-_hat_mock = mock.MagicMock()
-_hat_mock.MAX_OUTPUT_ON_SEC = 2.0
-_hat_mock.start_safety_watchdog = mock.MagicMock()
-sys.modules["hat"] = _hat_mock
+import test_support
+
+_hat_mock = test_support.install_hat_mock()
 
 import gemma_mood  # noqa: E402
+import gemy_math  # noqa: E402
+import gemy_qa  # noqa: E402
 import greeter  # noqa: E402
 
 
@@ -44,6 +44,24 @@ class TestMoodParsing(unittest.TestCase):
         self.assertEqual(gemma_mood.normalize_mood_label("cry"), "sad")
         self.assertEqual(gemma_mood.mood_for_reaction("  MEAN \n"), "mean")
 
+    def test_question_prompt_selected(self):
+        p = gemma_mood.mood_prompt_for("is the sky blue")
+        self.assertIn(ALLOWED := gemma_mood.ALLOWED_LABELS_LINE, p)
+        self.assertIn("capital of France", p)
+        p_math = gemma_mood.mood_prompt_for("is 8 plus 13 21")
+        self.assertIn("yes, no, or neutral", p_math)
+        p2 = gemma_mood.mood_prompt_for("you are stupid")
+        self.assertNotIn("yes, no, or neutral", p2)
+
+    def test_strict_label_parsing(self):
+        self.assertEqual(gemma_mood.normalize_mood_label("funny"), "funny")
+        self.assertEqual(gemma_mood.normalize_mood_label("  YES  "), "yes")
+        self.assertEqual(gemma_mood.normalize_mood_label("The answer is nice"), "nice")
+        self.assertIsNone(gemma_mood.normalize_mood_label("paris"))
+        self.assertIsNone(gemma_mood.normalize_mood_label("happy"))
+        self.assertEqual(gemma_mood.normalize_mood_label("yes no"), "neutral")
+        self.assertEqual(gemma_mood.normalize_mood_label("I think it is funny"), "funny")
+
 
 class TestKeywordClassify(unittest.TestCase):
     def setUp(self):
@@ -55,6 +73,27 @@ class TestKeywordClassify(unittest.TestCase):
 
     def test_gemy_name(self):
         self.assertEqual(self._c("hey Gemy"), "gemy")
+
+    def test_hi_gemy_greeting(self):
+        low, words = greeter._words_from_text("hi gemy")
+        self.assertTrue(greeter._is_greeting_with_name(low, words))
+        self.assertEqual(
+            greeter.classify_utterance("hi gemy", low, words, self.greet),
+            "gemy",
+        )
+
+    def test_tired_empathy_sad(self):
+        text = "i am a little sleepy right now"
+        low, words = greeter._words_from_text(text)
+        self.assertEqual(
+            greeter.classify_utterance(text, low, words, self.greet),
+            "sad",
+        )
+        low2, w2 = greeter._words_from_text("oh i'm tired")
+        self.assertEqual(
+            greeter.classify_utterance("oh i'm tired", low2, w2, self.greet),
+            "sad",
+        )
 
     def test_greet(self):
         self.assertEqual(self._c("hello there"), "greet")
@@ -80,6 +119,8 @@ class TestKeywordClassify(unittest.TestCase):
         self.assertEqual(self._c("no way"), "no")
 
     def test_math_quiz(self):
+        gemy_math.clear_math_context()
+
         def u(text):
             low, words = greeter._words_from_text(text)
             return greeter.classify_utterance(text, low, words, self.greet)
@@ -88,25 +129,68 @@ class TestKeywordClassify(unittest.TestCase):
         self.assertEqual(u("one plus one is two"), "yes")
         self.assertEqual(u("is one plus one five"), "no")
         self.assertEqual(u("one plus one equal to five"), "no")
-        self.assertEqual(greeter._try_math_yes_no(*greeter._words_from_text(
-            "two plus two equals four")), "yes")
+        self.assertEqual(
+            gemy_math.try_math_yes_no("two plus two equals four"), "yes")
         self.assertEqual(u("is seven times six equal to forty four"), "no")
         self.assertEqual(u("is 7 times 6 equal to 42"), "yes")
-        greeter._try_math_yes_no(*greeter._words_from_text(
-            "is seven times six equal to forty four"))
+        self.assertEqual(u("is five times four twenty"), "yes")
+        self.assertEqual(u("is five times four two"), "no")
+        gemy_math.try_math_yes_no("is seven times six equal to forty four")
         self.assertEqual(u("is it equal to forty two"), "yes")
         self.assertEqual(u("is it equal to 43"), "no")
-        greeter._clear_math_context()
+        self.assertEqual(
+            u("is eleven plus five equal to sixteen"), "yes")
+        self.assertEqual(
+            u("correct is five plus five equal to ten"), "yes")
+        gemy_math.clear_math_context()
+
+    def test_qa_fact(self):
+        def u(text):
+            low, words = greeter._words_from_text(text)
+            return greeter.classify_utterance(text, low, words, self.greet)
+
+        self.assertEqual(u("is the sky blue"), "yes")
+        self.assertEqual(u("is the sky orange"), "no")
+        self.assertEqual(u("is the moon made of cheese"), "no")
+        self.assertEqual(gemy_qa.try_answer_yes_no("can you hear me"), "yes")
 
     def test_resolve_reaction_kind(self):
         self.assertEqual(greeter.resolve_reaction_kind("funny"), "funny")
         self.assertEqual(greeter.resolve_reaction_kind("bogus"), "neutral")
         self.assertEqual(greeter.resolve_reaction_kind(None), "neutral")
 
+    def test_reactions_dict_has_every_beep_mood(self):
+        import gemy_reactions as gr
+        for kind in gr.BEEP_REACTIONS:
+            self.assertIn(
+                kind, greeter.REACTIONS,
+                f"{kind!r} missing from greeter.REACTIONS (would play neutral)",
+            )
+        self.assertIs(greeter.REACTIONS["sad"], greeter._react_sad)
+
+    def test_open_question_skips_gemma(self):
+        low, words = greeter._words_from_text("what is the capital of france")
+        out = greeter._maybe_gemma_assist(
+            "what is the capital of france",
+            low, words, mock.MagicMock(), None, True,
+        )
+        self.assertIsNone(out)
+
+    def test_incomplete_sky_fragment_skips_gemma(self):
+        low, words = greeter._words_from_text("is the sky")
+        gemma = mock.MagicMock()
+        out = greeter._maybe_gemma_assist("is the sky", low, words, gemma, None, True)
+        self.assertIsNone(out)
+        gemma.classify.assert_not_called()
+
     def test_off(self):
         low, words = greeter._words_from_text("Gemy turn off")
         self.assertEqual(
             greeter.classify_utterance("Gemy turn off", low, words, self.greet), "off")
+        low2, w2 = greeter._words_from_text("bye gemy")
+        self.assertTrue(greeter.wants_turn_off(low2, w2, "bye gemy"))
+        self.assertEqual(
+            greeter.classify_utterance("bye gemy", low2, w2, self.greet), "off")
 
     def test_conversation_without_gemma(self):
         def u(text):
@@ -124,6 +208,8 @@ class TestKeywordClassify(unittest.TestCase):
         ok, _why = stab.gemma_assist_allowed("Go", low, words)
         self.assertFalse(ok)
 
+        with stab._last_gemma_lock:
+            stab._last_gemma_assist_at = 0.0
         long_text = "I wonder what you think about the weather today"
         low2, words2 = greeter._words_from_text(long_text)
         ok2, _ = stab.gemma_assist_allowed(long_text, low2, words2)

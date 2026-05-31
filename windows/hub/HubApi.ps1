@@ -167,7 +167,7 @@ function Invoke-HubInstallDriver {
 }
 
 function Invoke-HubStartGemy {
-    param([switch]$NoVision)
+    param([switch]$NoVision, [switch]$NoGemmaMood)
 
     $h = Get-BoardHealth
     if (-not $h.BoardConnected) {
@@ -192,9 +192,11 @@ function Invoke-HubStartGemy {
     $wd = Get-RobotRepoRoot
     $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', $path)
     if ($NoVision) { $args += '-NoVision' }
+    if ($NoGemmaMood) { $args += '-NoGemmaMood' }
     Start-Process powershell -WorkingDirectory $wd -ArgumentList $args | Out-Null
 
-    $label = if ($NoVision) { 'Gemy (voice + keyword moods)' } else { 'Gemy (camera + keyword moods)' }
+    $mode = if ($NoGemmaMood) { 'keywords only, no Gemma' } else { 'keywords + Gemma assist' }
+    $label = if ($NoVision) { "Gemy voice ($mode)" } else { "Gemy camera+voice ($mode)" }
     Add-HubActivity "Launched $label - see PowerShell window for [ears] listening." 'ok'
     return @{
         ok      = $true

@@ -29,11 +29,23 @@ try:
     import gemy_diag
 except ImportError:
     gemy_diag = None  # type: ignore
+try:
+    import gemy_trace
+except ImportError:
+    gemy_trace = None  # type: ignore
 
 try:
     import gemy_stability as _stability
 except ImportError:
     _stability = None  # type: ignore
+
+import gemy_classify
+import gemy_empathy
+import gemy_fallback
+import gemy_math
+import gemy_phrase_buffer
+import gemy_qa
+import gemy_reactions
 
 # Inviolable: buzzer/LED never on > hat.MAX_OUTPUT_ON_SEC (see .cursor/rules/gemy-hardware-safety.mdc)
 hat.start_safety_watchdog()
@@ -44,7 +56,14 @@ def _diag(phase: str, detail: str = "") -> None:
         gemy_diag.log(phase, detail)
 
 
+def _trace(event: str, detail: str = "") -> None:
+    if gemy_trace is not None:
+        gemy_trace.trace(event, detail)
+
+
 def _diag_phase(phase: str, detail: str = "") -> None:
+    if gemy_trace is not None:
+        gemy_trace.set_phase(phase, detail)
     if gemy_diag is not None:
         gemy_diag.set_phase(phase, detail)
 
@@ -127,6 +146,16 @@ def _react_no():
 
 # Heard-name triggers (Moonshine may spell slightly wrong)
 GEMY_NAMES = {"gemy", "gemi", "jemmy", "jimmy"}
+_GREETING_WORDS = frozenset({"hi", "hey", "hello", "hiya", "yo", "howdy"})
+
+
+def _is_greeting_with_name(low: str, words: set) -> bool:
+    """'hi gemy' / 'hello Gemy' — fast path before math/QA/Gemma."""
+    if not (words & GEMY_NAMES or "gemy" in low or "gemi" in low):
+        return False
+    return bool(words & _GREETING_WORDS) or any(
+        p in low for p in ("hi ", "hey ", "hello ", "hiya ", "howdy ")
+    )
 
 REACTIONS = {
     "gemy":      _react_gemy,
@@ -134,10 +163,18 @@ REACTIONS = {
     "funny":     _react_funny,
     "nice":      _react_nice,
     "mean":      _react_mean,
+    "sad":       _react_sad,
     "yes":       _react_yes,
     "no":        _react_no,
     "neutral":   _react_neutral,
 }
+
+_missing_reactions = gemy_reactions.BEEP_REACTIONS - frozenset(REACTIONS)
+if _missing_reactions:
+    raise RuntimeError(
+        f"greeter.REACTIONS missing beep moods: {sorted(_missing_reactions)} "
+        "(classify can return a kind with no handler — see test_gemy_wiring.py)"
+    )
 
 _LABELS = {
     "gemy":           "Hi, I'm Gemy!",
@@ -297,6 +334,13 @@ def _words_from_text(text):
 def _is_yes(low, words):
     if words & NO:
         return False
+    # Do not treat quiz words ("correct", "right") as agreement during a question.
+    if gemy_qa.looks_like_question(low):
+        if any(p in low for p in _YES_PHRASES):
+            return True
+        if low.strip() in ("y", "ya", "yea"):
+            return True
+        return False
     if words & YES:
         return True
     if any(p in low for p in _YES_PHRASES):
@@ -309,6 +353,10 @@ def _is_yes(low, words):
 def _is_no(low, words):
     if words & YES and not (words & NO):
         return False
+    if gemy_qa.looks_like_question(low):
+        if any(p in low for p in _NO_PHRASES):
+            return True
+        return False
     if words & NO:
         return True
     if any(p in low for p in _NO_PHRASES):
@@ -316,166 +364,6 @@ def _is_no(low, words):
     if " no " in f" {low} " or low.startswith("no ") or low.endswith(" no"):
         return True
     return False
-
-
-# Small spoken numbers for "one plus one equals two" style quizzes (no Gemma needed).
-_NUM_WORD = {
-    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "too": 2, "to": None, "for": 4,
-}
-_MATH_YES_SNIPPETS = (
-    "one plus one is two", "one plus one equal two", "one plus one equals two",
-    "one plus one equal to two", "1 plus 1 is 2", "1 plus 1 equals 2",
-    "two plus two is four", "two plus two equals four", "two plus two equal four",
-    "is one plus one two", "is one plus one equal to two",
-    "does one plus one equal two", "one and one is two",
-)
-_MATH_NO_SNIPPETS = (
-    "one plus one is five", "one plus one equal five", "one plus one equals five",
-    "one plus one equal to five", "is one plus one five", "one plus one five",
-    "two plus two is five", "one plus one is three",
-)
-_RE_PLUS_EQ = re.compile(
-    r"(?:(?:is|does|are|can)\s+)?(\w+)\s+plus\s+(\w+)\s+"
-    r"(?:equal(?:s)?(?:\s+to)?|is|are|make(?:s)?)\s+(.+?)\s*$",
-)
-_RE_PLUS_TAIL = re.compile(
-    r"(?:is|does|are|can)\s+(\w+)\s+plus\s+(\w+)\s+(.+?)\s*$",
-)
-_RE_TIMES_EQ = re.compile(
-    r"(?:(?:is|does|are|can)\s+)?(\w+)\s+(?:times|multiplied by)\s+(\w+)\s+"
-    r"(?:equal(?:s)?(?:\s+to)?|is|are|make(?:s)?)\s+(.+?)\s*$",
-)
-_RE_TIMES_TAIL = re.compile(
-    r"(?:is|does|are|can)\s+(\w+)\s+(?:times|multiplied by)\s+(\w+)\s+(.+?)\s*$",
-)
-_RE_MATH_FOLLOWUP = re.compile(
-    r"(?:is\s+)?(?:it|that|the answer)\s+"
-    r"(?:(?:equal(?:s)?(?:\s+to)?)|is)\s+(.+?)\s*$",
-)
-_RE_MATH_FOLLOWUP_SHORT = re.compile(
-    r"^(?:is\s+)?(?:it|that)\s+(.+?)\s*$",
-)
-
-# Last correct numeric answer from a parsed quiz (for "is it equal to …" follow-ups).
-_math_last_answer = None
-
-
-def _clear_math_context():
-    global _math_last_answer
-    _math_last_answer = None
-
-
-def _remember_math_answer(a, b, op):
-    global _math_last_answer
-    if op == "+":
-        _math_last_answer = a + b
-    elif op == "*":
-        _math_last_answer = a * b
-
-
-def _eval_math_triple(a, b, c, op):
-    if a is None or b is None or c is None:
-        return None
-    _remember_math_answer(a, b, op)
-    if op == "+":
-        return "yes" if (a + b) == c else "no"
-    if op == "*":
-        return "yes" if (a * b) == c else "no"
-    return None
-
-
-def _parse_math_match(m, op):
-    a = _token_to_int(m.group(1))
-    b = _token_to_int(m.group(2))
-    c = _parse_spoken_number(m.group(3))
-    return _eval_math_triple(a, b, c, op)
-
-
-def _try_math_followup(n):
-    global _math_last_answer
-    if _math_last_answer is None:
-        return None
-    for pat in (_RE_MATH_FOLLOWUP, _RE_MATH_FOLLOWUP_SHORT):
-        m = pat.search(n)
-        if not m:
-            continue
-        c = _parse_spoken_number(m.group(1))
-        if c is not None:
-            return "yes" if c == _math_last_answer else "no"
-    return None
-
-
-def _token_to_int(tok):
-    if not tok:
-        return None
-    if tok.isdigit():
-        return int(tok)
-    return _NUM_WORD.get(tok)
-
-
-def _parse_spoken_number(phrase):
-    """Parse '42', 'seven', or 'forty two' style answers."""
-    if not phrase:
-        return None
-    p = phrase.strip().lower()
-    if p.isdigit():
-        return int(p)
-    one = _token_to_int(p)
-    if one is not None:
-        return one
-    parts = p.split()
-    if len(parts) != 2:
-        return None
-    tens_w, ones_w = parts
-    tens_map = {
-        "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
-        "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
-    }
-    if tens_w not in tens_map:
-        return None
-    ones = _token_to_int(ones_w)
-    if ones is None or ones < 0 or ones > 9:
-        return None
-    return tens_map[tens_w] + ones
-
-
-def _looks_like_math_quiz(low):
-    n = _norm_heard(low)
-    if any(x in n for x in (" plus ", " plus", " times ", " multiplied by", " multiply ")):
-        return True
-    if _math_last_answer is not None and re.search(
-            r"\b(it|that|the answer)\b", n):
-        return True
-    return False
-
-
-def _try_math_yes_no(low, words):
-    """Simple +/-/* quizzes -> yes/no without calling Gemma."""
-    n = _norm_heard(low)
-    follow = _try_math_followup(n)
-    if follow:
-        return follow
-    for snippet in _MATH_NO_SNIPPETS:
-        if snippet in n:
-            return "no"
-    for snippet in _MATH_YES_SNIPPETS:
-        if snippet in n:
-            return "yes"
-    for pat, op in (
-        (_RE_PLUS_EQ, "+"),
-        (_RE_PLUS_TAIL, "+"),
-        (_RE_TIMES_EQ, "*"),
-        (_RE_TIMES_TAIL, "*"),
-    ):
-        m = pat.search(n)
-        if not m:
-            continue
-        ans = _parse_math_match(m, op)
-        if ans:
-            return ans
-    return None
 
 
 _OFF_PHRASES = (
@@ -492,7 +380,7 @@ def wants_turn_off(low, words, text):
         return True
     if "stop" in words and (words & GEMY_NAMES or "gemy" in low):
         return True
-    if words >= {"goodbye", "bye"} and (words & GEMY_NAMES or "gemy" in low):
+    if (words & {"goodbye", "bye"}) and (words & GEMY_NAMES or "gemy" in low):
         return True
     if "turn" in words and "off" in words:
         return True
@@ -695,12 +583,33 @@ def classify_keywords(low, words, greet_set, joke_tracker=None):
 
 
 def classify_utterance(text, low, words, greet_set, joke_tracker=None, gemma_mood=None):
-    """Turn-off → knock-knock → name → keyword moods (beeps) → optional Gemma assist."""
+    """Turn-off → math → QA facts → yes/no → jokes → name → keywords → Gemma assist."""
     if wants_turn_off(low, words, text):
         if joke_tracker is not None:
             joke_tracker.reset()
-        _clear_math_context()
+        gemy_math.clear_math_context()
         return "off"
+    if _is_greeting_with_name(low, words):
+        if joke_tracker is not None:
+            joke_tracker.reset()
+        return "gemy"
+    # Math before generic yes/no so "correct, is five plus five ten" stays a quiz.
+    norm = _norm_heard(low)
+    quiz = gemy_math.try_math_yes_no(low, words, n=norm)
+    if quiz:
+        if joke_tracker is not None:
+            joke_tracker.reset()
+        return quiz
+    qa = gemy_qa.try_answer_yes_no(low, words)
+    if qa:
+        if joke_tracker is not None:
+            joke_tracker.reset()
+        return qa
+    empathy = gemy_empathy.try_empathy_mood(low, words)
+    if empathy:
+        if joke_tracker is not None:
+            joke_tracker.reset()
+        return empathy
     if _is_yes(low, words):
         if joke_tracker is not None:
             joke_tracker.reset()
@@ -709,11 +618,6 @@ def classify_utterance(text, low, words, greet_set, joke_tracker=None, gemma_moo
         if joke_tracker is not None:
             joke_tracker.reset()
         return "no"
-    quiz = _try_math_yes_no(low, words)
-    if quiz:
-        if joke_tracker is not None:
-            joke_tracker.reset()
-        return quiz
     if joke_tracker is not None:
         joke_kind = joke_tracker.on_line(low, words)
         if joke_kind:
@@ -732,23 +636,23 @@ def classify_utterance(text, low, words, greet_set, joke_tracker=None, gemma_moo
         if joke_tracker is not None:
             joke_tracker.reset()
         return conv
-    return None
+    return gemy_fallback.closest_beep_kind(low, words)
 
 
 def resolve_reaction_kind(kind):
-    """Map any label to a known reaction; unknown -> neutral (never crash react())."""
-    if not kind:
-        return "neutral"
-    if kind in REACTIONS:
-        return kind
-    print(f"[gemy] unknown reaction {kind!r} -> neutral", flush=True)
-    return "neutral"
+    """Map any label to a known beep reaction; unknown -> neutral (never crash react())."""
+    return gemy_reactions.resolve_beep_kind(kind)
 
 
-def _gemma_assist_timeout_s() -> float:
+def _gemma_assist_timeout_s(gemma_mood=None) -> float:
     if _stability is not None:
+        fn = getattr(_stability, "gemma_assist_timeout_s", None)
+        if callable(fn):
+            return fn(gemma_mood)
         return _stability.GEMMA_ASSIST_MAX_BLOCK_S
-    return 5.0
+    return 90.0 if gemma_mood is not None and not getattr(
+        gemma_mood, "_model_loaded", False
+    ) else 15.0
 
 
 def _gemma_allowed(text, low, words, joke_tracker) -> tuple[bool, str]:
@@ -760,6 +664,50 @@ def _gemma_allowed(text, low, words, joke_tracker) -> tuple[bool, str]:
     if len(stripped) < 4:
         return False, "too short"
     return True, ""
+
+
+def _maybe_gemma_assist(text, low, words, gemma_mood, joke_tracker, use_gemma_assist):
+    """Gemma assist when keywords/math/QA missed."""
+    if not use_gemma_assist or gemma_mood is None:
+        return None
+    math_quiz = gemy_math.looks_like_math_quiz(low)
+    skip, skip_why = gemy_qa.should_skip_gemma_assist(low)
+    if not skip and gemy_empathy.looks_like_personal_share(low):
+        skip, skip_why = True, "personal_share"
+    if skip:
+        if skip_why == "local_qa":
+            ans = gemy_qa.try_local_yes_no(low)
+            if ans:
+                print(f"[ears] local Q&A -> {ans} (skip Gemma).", flush=True)
+                _diag("classify", f"local_qa {ans}")
+                return ans
+        print(
+            f"[ears] {skip_why} question -> neutral, skip Gemma.",
+            flush=True,
+        )
+        _diag("classify", f"skip gemma {skip_why}")
+        return None
+    if not math_quiz and gemy_reactions.looks_like_open_ended_question(low):
+        print("[ears] open question (no yes/no beep) -> neutral, skip Gemma.", flush=True)
+        _diag("classify", "open question skip gemma")
+        return None
+    allowed, skip_why = _gemma_allowed(text, low, words, joke_tracker)
+    if not allowed:
+        _diag("classify", f"gemma skip: {skip_why}")
+        if gemy_qa.looks_like_question(low):
+            print(f"[ears] question but skip Gemma ({skip_why}) -> neutral.", flush=True)
+        else:
+            print(f"[ears] skip Gemma ({skip_why}) -> neutral.", flush=True)
+        return None
+    if math_quiz:
+        _diag("classify", "math quiz gemma assist (yes/no only)")
+    elif gemy_qa.looks_like_question(low):
+        _diag("classify", "gemma question assist")
+    kind = try_gemma_mood_assist(text, gemma_mood, joke_tracker, low, words)
+    if math_quiz and kind not in (None, "yes", "no", "off"):
+        print(f"[ears] math quiz: Gemma said {kind!r} -> neutral.", flush=True)
+        return None
+    return kind
 
 
 def try_gemma_mood_assist(text, gemma_mood, joke_tracker=None, low="", words=None):
@@ -788,11 +736,37 @@ def try_gemma_mood_assist(text, gemma_mood, joke_tracker=None, low="", words=Non
                 return None
         if not getattr(gemma_mood, "ready", False):
             return None
+    # Async Gemma: never block ears on first NPU load (preload runs in background).
+    if not getattr(gemma_mood, "_model_loaded", False):
+        print(
+            "[gemma] still loading on NPU in background -> neutral (no freeze). "
+            "Keywords/Q&A still work; try again in ~1 min.",
+            flush=True,
+        )
+        _diag("gemma_skip", "model_not_loaded_yet")
+        return None
     _diag_phase("gemma_assist", text[:60])
+    _trace(
+        "gemma_assist_start",
+        text[:60]
+        + (
+            f" | {gemy_trace.npu_snapshot(gemma_mood)}"
+            if gemy_trace is not None
+            else ""
+        ),
+    )
     label = None
     try:
-        timeout_s = _gemma_assist_timeout_s()
-        print(f"[gemma] checking mood (max {timeout_s:.0f}s, then neutral)...", flush=True)
+        timeout_s = _gemma_assist_timeout_s(gemma_mood)
+        if not getattr(gemma_mood, "_model_loaded", False):
+            print(
+                "[gemma] first mood check (model loads on NPU, can take 1-3 min; "
+                f"max {timeout_s:.0f}s then neutral)...",
+                flush=True,
+            )
+        else:
+            print(f"[gemma] checking mood (max {timeout_s:.0f}s, then neutral)...",
+                  flush=True)
         label = gemma_mood.classify(text, infer_timeout_s=timeout_s)
     except Exception as e:
         print(f"[gemma] assist failed ({e}); neutral.", flush=True)
@@ -804,13 +778,14 @@ def try_gemma_mood_assist(text, gemma_mood, joke_tracker=None, low="", words=Non
         elif hasattr(gemma_mood, "release_npu"):
             gemma_mood.release_npu()
     _diag("gemma_assist", f"label={label!r}")
+    label = gemy_reactions.gemma_label_to_beep_kind(label, low)
     if not label:
-        return None
-    label = resolve_reaction_kind(label)
-    if label == "neutral":
         return None
     if label == "off":
         return "off"
+    label = resolve_reaction_kind(label)
+    if label == "neutral":
+        return None
     if joke_tracker is not None:
         joke_tracker.reset()
     return label
@@ -837,6 +812,12 @@ class Greeter:
             self.last_activity = time.time()
             self._idle = False
 
+    def abort_reaction(self) -> None:
+        """Stuck-guard recovery: clear react lock so heartbeat/vision can resume."""
+        with self._lock:
+            self._reacting = False
+            self.last_activity = time.time()
+
     def vision_allowed(self):
         with self._lock:
             return (not self._reacting) and (time.time() >= self._vision_holdoff)
@@ -855,18 +836,28 @@ class Greeter:
             self._idle = False
             self._reacting = True
         _diag_phase(f"react_{kind}", why[:80])
+        _trace(f"react_{kind}_start", why[:80])
         print(f"[{time.strftime('%H:%M:%S')}] {_LABELS.get(kind, kind)}  ({kind} <- {why})")
         t0 = time.time()
         try:
-            REACTIONS.get(kind, _react_neutral)()
+            react_fn = REACTIONS.get(kind)
+            if react_fn is None:
+                print(
+                    f"[gemy] no REACTIONS handler for {kind!r} — using neutral "
+                    "(fix greeter.REACTIONS)",
+                    flush=True,
+                )
+                react_fn = _react_neutral
+            react_fn()
         except Exception as e:
             _diag("react_error", f"{kind} {e}")
-            raise
+            print(f"[gemy] reaction hardware error ({e}); continuing.", flush=True)
         finally:
             hat.force_all_off()
             with self._lock:
                 self._reacting = False
             _diag("react_done", f"{kind} {time.time() - t0:.2f}s")
+            _trace(f"react_{kind}_done", f"{time.time() - t0:.2f}s")
 
     def greet(self, why):
         self.react("greet", why)
@@ -969,6 +960,10 @@ def vision_loop(greeter, args, stop_event, cap, gemma_mood=None):
             if gemma_mood is not None and (
                 getattr(gemma_mood, "loading", False)
                 or getattr(gemma_mood, "_classify_busy", False)
+                or (
+                    _stability is not None
+                    and _stability.npu_held_by_gemma(gemma_mood)
+                )
             ):
                 time.sleep(0.25)
                 continue
@@ -1071,15 +1066,14 @@ def _run_gemma_heartbeat_while(loading_flag, greeter, stop_event):
 
 
 def init_gemma_mood(args, greeter, heartbeat_stop):
-    """Optional Gemma mood labels. Default path uses keywords only (hat beeps)."""
+    """Optional Gemma mood labels (only when --gemma-mood-assist)."""
     if getattr(args, "no_gemma_mood", False):
         print("[gemma] off - keyword moods only.", flush=True)
         return None
+    if not getattr(args, "gemma_mood_assist", False):
+        return None
     if getattr(args, "gemma_mood_serial", False):
         print("[gemma] --gemma-mood-serial is disabled (NPU freeze risk). Keywords only.", flush=True)
-        return None
-    if not getattr(args, "gemma_mood", False):
-        print("[gemma] off - keyword moods only.", flush=True)
         return None
     try:
         from gemma_mood import (
@@ -1104,10 +1098,11 @@ def init_gemma_mood(args, greeter, heartbeat_stop):
         worker = GemmaMoodSubprocess(timeout_s=timeout)
         print("[gemma] assist on - keywords first; Gemma if unclear (invalid -> neutral).",
               flush=True)
-        worker.start()
         print(
-            "[stability] Gemma: only for longer unclear phrases; "
-            f"max {_gemma_assist_timeout_s():.0f}s/block; NPU freed before each listen.",
+            "[stability] Gemma worker warm-starts; model unloads after each assist "
+            "(worker kept for speed). "
+            f"Max {_gemma_assist_timeout_s(worker):.0f}s first load / "
+            f"{_gemma_assist_timeout_s():.0f}s per check; NPU free while listening.",
             flush=True,
         )
         return worker
@@ -1209,17 +1204,38 @@ def speech_loop(greeter, args, stop_event, recognizer, source, gemma_mood=None,
                 heartbeat_stop=None):
     keywords = set(k.strip().lower() for k in args.keywords.split(","))
     joke_tracker = KnockKnockTracker()
+    phrase_buffer = gemy_phrase_buffer.PhraseBuffer()
+    # Default: local moods only (every phrase -> beep; no NPU). Gemma is opt-in.
     use_gemma_assist = bool(
-        gemma_mood and getattr(args, "gemma_mood", False)
+        gemma_mood
+        and getattr(args, "gemma_mood_assist", False)
         and not getattr(args, "no_gemma_mood", False)
     )
     if use_gemma_assist:
-        mood_src = "keywords + yes/no + Gemma assist when unclear"
+        mood_src = "keywords + yes/no + Gemma assist on neutral only (experimental)"
     else:
-        mood_src = "keywords + yes/no"
+        mood_src = "keywords + yes/no + empathy + closest/neutral (no NPU)"
     print(f"[ears] listening (moods: {mood_src}).", flush=True)
     greeter.touch()
-    if (
+    if use_gemma_assist and hasattr(gemma_mood, "warm_worker"):
+        def _warm():
+            # Let the user say "hi Gemy" before background NPU preload (avoids NPU fight).
+            _trace("gemma_warm_wait", "25s before worker+preload")
+            if stop_event.wait(25.0):
+                return
+            _trace("gemma_warm_start", "warm_worker")
+            gemma_mood.warm_worker()
+            preload = getattr(gemma_mood, "start_background_preload", None)
+            if callable(preload):
+                print(
+                    "[gemma] background preload started (ears stay responsive; "
+                    "assist when load finishes).",
+                    flush=True,
+                )
+                _trace("gemma_preload_start", "timeout=120s")
+                preload(timeout_s=120.0)
+        threading.Thread(target=_warm, name="gemma-warm", daemon=True).start()
+    elif (
         heartbeat_stop is not None
         and hasattr(gemma_mood, "start_background")
         and getattr(gemma_mood, "_state", None) == "idle"
@@ -1228,10 +1244,21 @@ def speech_loop(greeter, args, stop_event, recognizer, source, gemma_mood=None,
     print(f"[ears] Say hello, yes/no, jokes, nice/mean/sad things, or 'Gemy turn off'.",
           flush=True)
     print(f"[ears] Say 'Gemy turn off' (or 'stop') to end the demo.", flush=True)
+    if use_gemma_assist:
+        print(
+            "[ears] Quiz tip: say the full question in one breath "
+            "(e.g. 'is the sky green'). Short cuts like 'is the sky' -> neutral.",
+            flush=True,
+        )
     try:
         with recognizer:
             while not stop_event.is_set():
-                if _stability is not None:
+                if _stability is not None and _stability.npu_held_by_gemma(gemma_mood):
+                    _trace(
+                        "npu_busy_before_listen",
+                        gemy_trace.npu_snapshot(gemma_mood)
+                        if gemy_trace is not None else "",
+                    )
                     _stability.ensure_npu_for_ears(gemma_mood)
                 _diag_phase("listen_wait", "Moonshine listen_once")
                 t0_listen = time.time()
@@ -1244,46 +1271,54 @@ def speech_loop(greeter, args, stop_event, recognizer, source, gemma_mood=None,
                         t = recognizer.listen_once(stop_event=stop_event)
                 except Exception as listen_err:
                     _diag("listen_error", str(listen_err))
+                    err_s = str(listen_err)
+                    print(f"[ears] listen error ({listen_err}); recovering.", flush=True)
                     if _stability is not None:
                         _stability.recover_audio_source(source)
-                    raise
+                        _stability.ensure_npu_for_ears(gemma_mood)
+                    if "failed to acquire hardware" in err_s:
+                        print(
+                            "[ears] NPU busy — waiting for Gemma preload to yield, then retry.",
+                            flush=True,
+                        )
+                        time.sleep(1.0)
+                    continue
                 listen_s = time.time() - t0_listen
                 if t is None:
                     if stop_event.is_set():
                         _diag("listen", "None (stop)")
                         break
+                    _trace("listen_timeout", f"after {listen_s:.1f}s")
                     _diag("listen", f"timeout/recovery after {listen_s:.1f}s")
                     continue
                 text = t.text.strip()
                 if not text:
+                    _trace("listen_empty", f"after {listen_s:.1f}s")
                     _diag("listen", f"empty after {listen_s:.1f}s")
                     continue
+                _trace("listen_ok", f"{listen_s:.1f}s text={text[:60]!r}")
                 _diag("listen_done", f"{listen_s:.1f}s text={text[:60]!r}")
-                if gemy_diag is not None:
+                if gemy_trace is not None:
+                    gemy_trace.mark_ears_heard(text)
+                elif gemy_diag is not None:
                     gemy_diag.mark_ears_heard(text)
-                low, words = _words_from_text(text)
                 _diag_phase("classify", text[:60])
-                kind = classify_utterance(
-                    text, low, words, keywords, joke_tracker, gemma_mood=None
+                merged = False
+                low, words = _words_from_text(text)
+                t_buf, low, words, merged = phrase_buffer.absorb(text, low, words)
+                if merged:
+                    text = t_buf
+                    print(f"[ears] merged phrase: {text!r}", flush=True)
+                    _diag("listen", f"merged {text[:60]!r}")
+                kind = gemy_classify.classify_heard(
+                    text,
+                    greet_keywords=keywords,
+                    joke_tracker=joke_tracker,
+                    use_gemma_assist=use_gemma_assist,
+                    gemma_mood=gemma_mood if use_gemma_assist else None,
                 )
-                _diag("classify", f"keyword kind={kind!r}")
-                if kind is None and use_gemma_assist:
-                    if _looks_like_math_quiz(low):
-                        print("[ears] math quiz (unparsed) -> neutral, skip Gemma.",
-                              flush=True)
-                        _diag("classify", "math quiz skip gemma")
-                    else:
-                        allowed, skip_why = _gemma_allowed(
-                            text, low, words, joke_tracker
-                        )
-                        if not allowed:
-                            _diag("classify", f"gemma skip: {skip_why}")
-                            print(f"[ears] skip Gemma ({skip_why}) -> neutral.", flush=True)
-                        else:
-                            kind = try_gemma_mood_assist(
-                                text, gemma_mood, joke_tracker, low, words
-                            )
-                kind = resolve_reaction_kind(kind)
+                _diag("classify", f"kind={kind!r}")
+                _trace("classify_done", f"kind={kind!r}")
                 if kind == "off":
                     print(f"\n[ears] heard: {text!r} -> off (shutting down)", flush=True)
                     print("[gemy] Goodbye!", flush=True)
@@ -1300,6 +1335,14 @@ def speech_loop(greeter, args, stop_event, recognizer, source, gemma_mood=None,
                     print(f"[gemy] reaction error ({react_err}); continuing.",
                           flush=True)
                     hat.force_all_off()
+                if (
+                    use_gemma_assist
+                    and kind == "neutral"
+                    and hasattr(gemma_mood, "start_prewarm_background")
+                    and _stability is not None
+                    and not _stability.npu_held_by_gemma(gemma_mood)
+                ):
+                    gemma_mood.start_prewarm_background(timeout_s=50.0)
     except Exception as e:
         import traceback
         err = str(e)
@@ -1335,7 +1378,9 @@ def main(argv=None):
     p.add_argument("--no-gemma-mood", action="store_true",
                    help="disable Gemma mood assist (keywords only)")
     p.add_argument("--gemma-mood", action="store_true",
-                   help="Gemma 3 mood assist when keywords do not match (safe fallback)")
+                   help=argparse.SUPPRESS)  # legacy; use --gemma-mood-assist
+    p.add_argument("--gemma-mood-assist", action="store_true",
+                   help="experimental: Gemma on neutral only (NPU risk; default off)")
     p.add_argument("--gemma-mood-serial", action="store_true",
                    help=argparse.SUPPRESS)
     p.add_argument("--gemma-in-process", action="store_true",
@@ -1392,8 +1437,14 @@ def main(argv=None):
         if recognizer is None:
             args.no_speech = True
 
-    if not args.no_speech:
+    if not args.no_speech and getattr(args, "gemma_mood_assist", False):
         gemma_mood = init_gemma_mood(args, greeter, gemma_heartbeat_stop)
+    elif not args.no_speech:
+        print(
+            "[gemma] off — every phrase maps locally (neutral or closest beep). "
+            "Use --gemma-mood-assist to experiment with NPU mood.",
+            flush=True,
+        )
 
     if not args.no_intro and not args.no_speech:
         print("[gemy] Hello! This is Gemy.", flush=True)
@@ -1427,11 +1478,15 @@ def main(argv=None):
     threads.append(threading.Thread(target=idle_loop, name="idle", daemon=True))
     for t in threads:
         t.start()
+    if gemy_trace is not None:
+        gemy_trace.start_watchdog(stop_event, gemma_mood, greeter, interval_s=30.0)
+        _trace("trace_on", "grep [trace] in /home/root/gemy.log (GEMY_TRACE=0 to disable)")
     if gemy_diag is not None and gemy_diag.enabled():
         gemy_diag.start_watchdog(stop_event, gemma_mood, greeter, interval_s=20.0)
-    if _stability is not None and not args.no_speech:
+    if _stability is not None:
         _stability.start_session_heartbeat(stop_event, greeter)
-        _stability.start_stuck_guard(stop_event, gemma_mood, greeter, source)
+        if not args.no_speech:
+            _stability.start_stuck_guard(stop_event, gemma_mood, greeter, source)
 
     try:
         if args.no_vision:

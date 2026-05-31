@@ -6,7 +6,8 @@
 param(
     [switch]$Quick,
     [switch]$StartGemy,
-    [switch]$NoPush
+    [switch]$NoPush,
+    [switch]$HeartbeatSmoke
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,11 +20,21 @@ function Step($msg) {
     Write-Host "==> $msg" -ForegroundColor Cyan
 }
 
-Step "PC unit tests (greeter + gemma_mood logic)"
-$unit = Join-RobotPath "board", "python", "test_gemy_unit.py"
-python $unit
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "  All PC unit tests passed." -ForegroundColor Green
+Step "PC tests (black-box classify first, then unit/wiring)"
+foreach ($testScript in @(
+        "test_gemy_blackbox.py",
+        "test_gemy_classify_integration.py",
+        "test_gemy_wiring.py",
+        "test_gemy_unit.py", "test_gemy_math.py", "test_gemy_qa.py",
+        "test_gemy_phrase_buffer.py", "test_gemy_empathy.py", "test_gemy_fallback.py",
+        "test_gemy_perf.py", "test_gemy_stability.py",
+        "test_gemy_heartbeat_smoke.py", "test_gemy_reactions.py"
+    )) {
+    $unit = Join-RobotPath "board", "python", $testScript
+    python $unit
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+Write-Host "  All PC unit + perf tests passed." -ForegroundColor Green
 
 Step "Waiting for board (up to 45s)"
 $found = $false
@@ -49,7 +60,10 @@ if (-not $NoPush) {
     Step "Push scripts to board"
     & adb wait-for-device | Out-Null
     $files = @(
-        "greeter.py", "hat.py", "gemma_mood.py", "gemma_mood_worker.py", "gemy_smoke_test.py"
+        "greeter.py", "hat.py", "gemma_mood.py", "gemma_mood_worker.py",
+        "gemy_math.py", "gemy_qa.py", "gemy_empathy.py", "gemy_fallback.py",
+        "gemy_classify.py", "gemy_phrase_buffer.py", "gemy_reactions.py",
+        "gemy_stability.py", "gemy_diag.py", "gemy_trace.py", "gemy_smoke_test.py", "gemy_heartbeat_smoke.py"
     )
     foreach ($f in $files) {
         $local = Join-RobotPath "board", "python", $f
@@ -80,6 +94,16 @@ if ($smoke -ne 0) {
 }
 Write-Host ""
 Write-Host "Smoke test PASSED." -ForegroundColor Green
+
+if ($HeartbeatSmoke) {
+    Step "Heartbeat + memory liveness (on board)"
+    $hbArgs = @()
+    if ($Quick) { $hbArgs += "-Seconds", "35" }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File `
+        (Join-RobotPath "windows", "setup", "gemy-heartbeat-smoke.ps1") `
+        @hbArgs -NoPush
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
 if ($StartGemy) {
     Step "Starting Gemy (voice only)"

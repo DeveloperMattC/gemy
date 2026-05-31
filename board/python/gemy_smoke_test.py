@@ -31,7 +31,11 @@ def fail(msg: str) -> None:
 def check_files() -> bool:
     print("[1] Required files on board", flush=True)
     good = True
-    for path in (GREETER, f"{ROOT}/hat.py", f"{ROOT}/gemma_mood.py", WORKER, PY):
+    for path in (
+        GREETER, f"{ROOT}/hat.py", f"{ROOT}/gemma_mood.py", WORKER, PY,
+        f"{ROOT}/gemy_stability.py", f"{ROOT}/gemy_diag.py",
+        f"{ROOT}/gemy_heartbeat_smoke.py",
+    ):
         if os.path.isfile(path):
             ok(path)
         else:

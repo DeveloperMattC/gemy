@@ -2,12 +2,16 @@
 """Isolated Gemma 3 mood worker (separate process from greeter.py).
 
 Greeter uses keyword moods first; this process loads Gemma on the NPU only when
-needed (first classify). Moonshine STT runs in greeter and owns the NPU until then.
+needed (first classify or P|preload). Moonshine STT runs in greeter and owns the
+NPU while listening.
 
 Protocol (stdout / stdin line-based):
   stderr  progress logs
   stdout  READY           worker alive (no model loaded yet)
-  stdin   C|<utterance>   classify (loads model on first request)
+  stdout  OK              preload or release done
+  stdin   P|              preload model on NPU (optional warm-up)
+  stdin   R|              unload model, free NPU (keep process alive)
+  stdin   C|<utterance>   classify (loads model on first request if needed)
   stdout  L|<mood|empty>  one mood label or empty
 """
 from __future__ import annotations
@@ -27,6 +31,24 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
+def _load_classifier(classifier):
+    if classifier is None:
+        _log("[gemma-worker] loading Gemma 3 on NPU (first check, can take 1-3 min)...")
+        classifier = GemmaMoodClassifier()
+        classifier.load()
+        _log("[gemma-worker] model ready")
+    return classifier
+
+
+def _release_classifier(classifier):
+    if classifier is not None:
+        try:
+            classifier.unload()
+        except Exception as e:
+            _log(f"[gemma-worker] unload: {e}")
+    return None
+
+
 def main() -> int:
     try:
         _log("[gemma-worker] ready (Gemma loads on first mood check)")
@@ -36,15 +58,19 @@ def main() -> int:
             line = raw.strip()
             if not line:
                 continue
+            if line.startswith("R|"):
+                classifier = _release_classifier(classifier)
+                print("OK", flush=True)
+                continue
+            if line.startswith("P|"):
+                classifier = _load_classifier(classifier)
+                print("OK", flush=True)
+                continue
             if not line.startswith("C|"):
                 _log(f"[gemma-worker] ignore: {line!r}")
                 continue
             text = line[2:]
-            if classifier is None:
-                _log("[gemma-worker] loading Gemma 3 on NPU (first check, can take 1-3 min)...")
-                classifier = GemmaMoodClassifier()
-                classifier.load()
-                _log("[gemma-worker] model ready")
+            classifier = _load_classifier(classifier)
             label = classifier.classify(text) or ""
             print(f"L|{label}", flush=True)
     except Exception as e:

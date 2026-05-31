@@ -58,7 +58,10 @@ function Invoke-AdbShell([string]$Command, [int]$TimeoutSec = 25) {
 }
 
 function Test-BoardGemyScripts {
-    $out = Invoke-AdbShell "test -f /home/root/greeter.py && test -f /home/root/hat.py && test -f /home/root/gemma_mood.py && echo ok"
+    $out = Invoke-AdbShell (
+        "test -f /home/root/greeter.py && test -f /home/root/gemy_reactions.py " +
+        "&& test -f /home/root/gemy_stability.py && echo ok"
+    )
     return ($out -match '\bok\b')
 }
 
@@ -116,11 +119,21 @@ function Sync-BoardGemyFiles {
     }
 
     & adb wait-for-device 2>$null | Out-Null
+    # Keep in sync with windows/demos/greet-demo.ps1 $pushList (+ watcher/boot extras).
     $push = @(
         @("board", "python", "greeter.py"),
         @("board", "python", "hat.py"),
         @("board", "python", "gemma_mood.py"),
         @("board", "python", "gemma_mood_worker.py"),
+        @("board", "python", "gemy_diag.py"),
+        @("board", "python", "gemy_trace.py"),
+        @("board", "python", "gemy_empathy.py"),
+        @("board", "python", "gemy_fallback.py"),
+        @("board", "python", "gemy_stability.py"),
+        @("board", "python", "gemy_math.py"),
+        @("board", "python", "gemy_qa.py"),
+        @("board", "python", "gemy_phrase_buffer.py"),
+        @("board", "python", "gemy_reactions.py"),
         @("board", "python", "gemy-watcher.py"),
         @("board", "shell", "gemy-boot.sh")
     )

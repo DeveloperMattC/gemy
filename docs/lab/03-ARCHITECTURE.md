@@ -89,6 +89,8 @@ PDM microphone (HAT)
     → hat.gemy_funny / gemy_greet / gemy_mean / … (one GPIO lock each)
 ```
 
+**NPU (one accelerator):** Moonshine uses the NPU during `listen_once`. Gemma loads/runs only **between** listens. Worker `R|` unloads the model before the next listen; `READY` does **not** mean the model is loaded yet. See [LEARNINGS.md](LEARNINGS.md).
+
 **Note:** Default ALSA device works in testing (`device=None`). Device `0` is the hardware capture device; both showed signal in RMS probes.
 
 ---

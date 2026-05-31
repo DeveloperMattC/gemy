@@ -197,6 +197,14 @@
   $("btn-start-cam").addEventListener("click", () =>
     postAction("/api/start-gemy", { noVision: false }, "Launching…", "Launched Gemy (camera + voice)")
   );
+  $("btn-start-safe").addEventListener("click", () =>
+    postAction(
+      "/api/start-gemy",
+      { noVision: true, noGemmaMood: true },
+      "Launching stable mode…",
+      "Launched Gemy (keywords only)"
+    )
+  );
   $("btn-hat").addEventListener("click", () =>
     postAction("/api/hat-panel", null, "Opening HAT panel…", "HAT panel opened")
   );

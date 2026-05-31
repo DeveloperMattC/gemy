@@ -60,6 +60,19 @@ def mark_heartbeat_pulse(source: str) -> None:
     log("heartbeat", source)
 
 
+def heartbeat_pulse_count() -> int:
+    with _lock:
+        return _heartbeat_pulses
+
+
+def heartbeat_seconds_since_last() -> float:
+    """Seconds since last pulse, or -1 if none yet."""
+    with _lock:
+        if _heartbeat_last_at <= 0:
+            return -1.0
+        return time.time() - _heartbeat_last_at
+
+
 def get_phase_age() -> tuple[str, str, float]:
     """Current phase, detail, seconds since last phase change (-1 if unknown)."""
     now = time.time()
@@ -104,10 +117,19 @@ def snapshot(gemma_mood=None, greeter=None) -> str:
 def _gemma_status(gemma_mood) -> str:
     st = getattr(gemma_mood, "_state", "?")
     busy = getattr(gemma_mood, "_classify_busy", False)
+    prewarm = getattr(gemma_mood, "_prewarm_busy", False)
+    npu = getattr(gemma_mood, "_npu_resident", False)
+    loaded = getattr(gemma_mood, "_model_loaded", False)
     cd = getattr(gemma_mood, "_assist_cooldown_until", 0.0)
     proc = getattr(gemma_mood, "_proc", None)
     poll = proc.poll() if proc else None
     extra = []
+    if loaded:
+        extra.append("loaded")
+    if npu:
+        extra.append("npu")
+    if prewarm:
+        extra.append("prewarm")
     if busy:
         extra.append("classify_busy")
     if cd > time.time():

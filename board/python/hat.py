@@ -421,19 +421,34 @@ def gemy_greet():
 
 
 def gemy_nice():
-    """Compliment: happy rising beeps + rainbow + green/blue sparkle."""
+    """Happy woohoo: green LED + rising cheer beeps (woo-woo-hoo!, one lock)."""
     with _hw_lock:
         try:
-            _play([
-                (40, 48), (52, 40), (64, 34), (78, 28),
-                (92, 22), (108, 0),
-            ])
-            _rainbow_under_lock(cycles=2, dwell_ms=100)
-            for color in ("green", "blue", "green", "blue"):
-                led(color, True)
-                time.sleep(_cap_sec(0.08))
-                led(color, False)
-                time.sleep(0.05)
+
+            def _cheer(on_ms: int, pause_s: float) -> None:
+                """One cheer pulse: green on + beep (length = pitch feel on active buzzer)."""
+                on_ms = _cap_ms(on_ms)
+                _led_set_tracked("green", True)
+                try:
+                    _buzzer_set(True)
+                    time.sleep(on_ms / 1000.0)
+                finally:
+                    _buzzer_set(False)
+                _led_set_tracked("green", False)
+                if pause_s > 0:
+                    time.sleep(pause_s)
+
+            # "Woo-hoo!" — short woo-woo, then longer rising hoo notes
+            for on_ms, pause in (
+                (55, 0.09),
+                (60, 0.09),
+                (85, 0.10),
+                (110, 0.12),
+                (145, 0.14),
+                (185, 0.16),
+                (220, 0.0),
+            ):
+                _cheer(on_ms, pause)
         finally:
             _hw_release_under_lock()
 
@@ -467,28 +482,36 @@ def gemy_no():
 
 
 def gemy_sad():
-    """Hurt feelings / sad news: quiet whimpers + blue cry flashes (one lock)."""
+    """Empathetic 'bohooo' cry: blue LED only, descending whimper beeps (one lock)."""
     with _hw_lock:
         try:
-            # Shorter, softer pulses than mean; blue "tears" between whimpers.
-            steps = [(70, 0.14, 0.22), (60, 0.12, 0.20), (55, 0.12, 0.18), (45, 0.10, 0.0)]
-            for on_ms, blink_s, pause_s in steps:
+            _leds_off_under_lock()
+
+            def _sob(on_ms: int, pause_s: float) -> None:
+                """One cry: blue on + buzz, then off (active buzzer = rhythm only)."""
                 on_ms = _cap_ms(on_ms)
-                blink_s = _cap_sec(blink_s)
-                led("blue", True)
+                _led_set_tracked("blue", True)
                 try:
                     _buzzer_set(True)
-                    time.sleep(min(on_ms / 1000.0, blink_s))
+                    time.sleep(on_ms / 1000.0)
                 finally:
                     _buzzer_set(False)
-                led("blue", False)
+                _led_set_tracked("blue", False)
                 if pause_s > 0:
                     time.sleep(pause_s)
-            for _ in range(3):
-                led("blue", True)
-                time.sleep(_cap_sec(0.10))
-                led("blue", False)
-                time.sleep(0.14)
+
+            # "Bohooo" — longer cries trailing down (no rainbow, blue only)
+            for on_ms, pause in (
+                (130, 0.16),
+                (115, 0.14),
+                (100, 0.18),
+                (90, 0.16),
+                (78, 0.18),
+                (68, 0.16),
+                (58, 0.14),
+                (50, 0.0),
+            ):
+                _sob(on_ms, pause)
         finally:
             _hw_release_under_lock()
 

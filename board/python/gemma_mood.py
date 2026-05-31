@@ -17,11 +17,14 @@ import time
 _GEMMA_WORKER = "/home/root/gemma_mood_worker.py"
 _VENV_PY = "/home/root/sl2610-examples/.venv/bin/python3"
 
-# Labels greeter.py can react to (neutral = no Gemma override when returned alone).
+# Closed vocabulary — must match greeter.REACTIONS + off (see gemy_reactions.py).
 VALID_MOODS = frozenset({
     "gemy", "greet", "funny", "nice", "mean", "sad", "yes", "no",
     "neutral", "off",
 })
+
+# Single line the model must choose from (deterministic label picker, not chat).
+ALLOWED_LABELS_LINE = "gemy greet funny nice mean sad yes no off neutral"
 
 _MOOD_ALIASES = {
     "insult": "mean", "rude": "mean", "negative": "mean", "angry": "mean",
@@ -41,37 +44,129 @@ _MOOD_ALIASES = {
     "bye": "off", "quit": "off", "exit": "off",
 }
 
-_MOOD_PROMPT = """You classify what a person said to a small robot named Gemy.
-Reply with EXACTLY ONE WORD from this list only:
-gemy, greet, funny, nice, mean, sad, yes, no, off, neutral
+# Never valid Gemma output (not in ALLOWED_LABELS_LINE).
+_REJECT_LABELS = frozenset({
+    "paris", "london", "france", "maybe", "perhaps", "sorry", "because",
+    "the", "and", "but", "mood", "label", "answer", "response",
+    "happy", "glad", "curious", "confused", "unknown", "think",
+})
 
-Rules:
-- gemy: they say the robot's name (Gemy, Gemi, Jemmy) without asking to stop
-- greet: hello, hi, hey, good morning
-- funny: jokes, punchlines, haha, lol, knock-knock
-- nice: compliments, thanks, love, you're awesome, kindness
-- mean: insults, hate, rude, shut up, stupid, go away (angry at the robot)
-- sad: lonely, rejection, bad news, crying, nobody likes you, leaving forever
-- yes: agreeing (yes, yeah, sure, correct, I agree) OR true quiz answers (one plus one is two)
-- no: disagreeing (no, nope, nah, wrong) OR false quiz answers (one plus one is five)
-- off: turn off, stop listening, go to sleep, Gemy turn off, power down
-- neutral: unclear or small talk that fits none of the above
+_PROMPT_HEADER = """You are a strict LABEL PICKER for robot Gemy. You are NOT a chatbot.
+Gemy has NO voice. It can ONLY play pre-made beep/LED patterns — one label triggers one pattern.
 
-Output ONLY one word from the list. No punctuation or explanation.
+ALLOWED OUTPUT — exactly ONE word, copied from this list, nothing else:
+""" + ALLOWED_LABELS_LINE + """
+
+FORBIDDEN: sentences, explanations, place names, numbers as answers, new moods,
+or any word not in the list. Wrong examples (never do this): paris, happy, hello there,
+the answer is yes, I think funny, 42, capital.
+
+If nothing fits, output exactly: neutral
+When unsure, output exactly: neutral
+
+Beep meanings (pick the closest label only):
+- yes = one green beep (agree OR true yes/no quiz)
+- no = two red beeps (disagree OR false yes/no quiz)
+- neutral = soft beep (cannot answer with beeps only)
+- greet = hello / hi
+- gemy = they said the robot name
+- funny = joke / haha
+- nice = thanks / compliment
+- mean = insult at Gemy
+- sad = sad news / lonely (not insults)
+- off = turn off / stop listening
+"""
+
+_MOOD_PROMPT = _PROMPT_HEADER + """
+Classify what they said (not a quiz — pick mood or yes/no only if clearly stated).
 
 What they said: "{text}"
-One word:"""
+Label:"""
+
+_MOOD_PROMPT_QUESTION = _PROMPT_HEADER + """
+They asked a QUESTION. Gemy cannot speak the answer.
+- yes: ONLY true/false question AND answer is true (is the sky blue)
+- no: ONLY true/false question AND answer is false
+- neutral: what/who/where/why, trivia, math you cannot verify, opinions, stories
+  (what is the capital of France -> neutral)
+- Do NOT output facts. Do NOT guess yes/no for open questions.
+
+What they asked: "{text}"
+Label:"""
+
+_MOOD_PROMPT_MATH = _PROMPT_HEADER + """
+They asked a MATH yes/no quiz. Output ONLY: yes, no, or neutral.
+- yes: the math check is true
+- no: the math check is false
+- neutral: not a clear math check or you are unsure
+Do NOT output numbers or words like twenty-one — only yes, no, or neutral.
+
+What they asked: "{text}"
+Label:"""
+
+
+def mood_prompt_for(text: str) -> str:
+    """Pick strict prompt: math quiz, question, or general."""
+    low = text.lower()
+    try:
+        import gemy_math
+        if gemy_math.looks_like_math_quiz(low):
+            return _MOOD_PROMPT_MATH
+    except ImportError:
+        pass
+    try:
+        import gemy_qa
+        if gemy_qa.looks_like_question(low):
+            return _MOOD_PROMPT_QUESTION
+    except ImportError:
+        pass
+    return _MOOD_PROMPT
+
+
+def _strip_label_boilerplate(raw: str) -> str:
+    s = str(raw).strip().lower()
+    s = re.sub(r"[^\w\s]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    for prefix in (
+        "the label is", "the mood is", "the answer is", "label is", "mood is",
+        "answer is", "response is", "i choose", "output", "label", "mood", "answer",
+    ):
+        if s.startswith(prefix):
+            s = s[len(prefix):].strip()
+    return s
+
+
+def _word_to_mood(word: str) -> str | None:
+    if not word or word in _REJECT_LABELS:
+        return None
+    if word in VALID_MOODS:
+        return word
+    return _MOOD_ALIASES.get(word)
 
 
 def normalize_mood_label(raw: str) -> str | None:
-    """Map raw model text to a valid mood id, or None if unknown / empty."""
+    """Map raw model text to one allowed label, or None if unknown (caller -> neutral)."""
     if not raw or not str(raw).strip():
         return None
-    for word in re.findall(r"[a-z]+", str(raw).lower()):
-        if word in VALID_MOODS:
-            return word
-        if word in _MOOD_ALIASES:
-            return _MOOD_ALIASES[word]
+    s = _strip_label_boilerplate(raw)
+    if not s:
+        return None
+    words = re.findall(r"[a-z]+", s)
+    if not words:
+        return None
+    if len(words) == 1:
+        return _word_to_mood(words[0])
+    # Multi-token output: collect unique moods in order; reject ambiguity.
+    found: list[str] = []
+    for w in words:
+        m = _word_to_mood(w)
+        if m and m not in found:
+            found.append(m)
+    if len(found) == 1:
+        return found[0]
+    if len(found) > 1:
+        # e.g. "yes no" or "funny nice" -> not deterministic
+        return "neutral"
     return None
 
 
@@ -128,11 +223,21 @@ class GemmaMoodClassifier:
         )
         _gemma_progress(f"[gemma] mood model ready ({time.time() - t0:.1f}s).")
 
+    def unload(self) -> None:
+        """Drop model from RAM/NPU so Moonshine can use the accelerator."""
+        with self._lock:
+            self._backend = None
+        try:
+            import gc
+            gc.collect()
+        except Exception:
+            pass
+
     def classify(self, text: str) -> str | None:
         if not self._backend or not text.strip():
             return None
         safe = text.replace('"', "'").replace("\n", " ")[:240]
-        prompt = _MOOD_PROMPT.format(text=safe)
+        prompt = mood_prompt_for(text).format(text=safe)
         t0 = time.time()
         raw = ""
         try:
@@ -246,7 +351,11 @@ class GemmaMoodSubprocess:
         self._ready = threading.Event()
         self._stderr_thread = None
         self._classify_busy = False
+        self._prewarm_busy = False
+        self._prewarm_cancel = threading.Event()
         self._assist_cooldown_until = 0.0
+        self._model_loaded = False
+        self._npu_resident = False
 
     @property
     def ready(self) -> bool:
@@ -256,22 +365,165 @@ class GemmaMoodSubprocess:
     def loading(self) -> bool:
         return self._state == "loading"
 
+    def warm_worker(self) -> None:
+        """Start worker process early (READY fast; model loads on first C| or P|)."""
+        if self._state in ("loading", "ready"):
+            return
+        if self._state == "failed":
+            return
+        self.start()
+
     def release_npu(self) -> None:
-        """Stop worker so Moonshine can use the NPU (SL2610 has one shared accelerator)."""
-        self._abort_classify(reason="release_npu")
+        """Free NPU for Moonshine; kill worker only if soft release fails."""
+        if self._classify_busy:
+            self._abort_classify(reason="release_npu_busy")
+            return
+        if not self.release_npu_soft():
+            self._abort_classify(reason="release_npu")
 
     def finish_assist(self) -> None:
-        """End one assist attempt; always release NPU before the next listen."""
-        self._abort_classify(reason="finish_assist")
+        """End one assist — unload model from NPU but keep worker for faster next check."""
+        self._classify_busy = False
+        self.release_npu_soft()
+
+    def release_npu_soft(self) -> bool:
+        """Unload model in worker (R|); keep process. Returns True if NPU is free."""
+        if not self._npu_resident:
+            return True
+        if not self._proc or self._proc.poll() is not None:
+            self._npu_resident = False
+            return True
+        if self._classify_busy or self._prewarm_busy:
+            return False
+        ok = self._worker_command("R|", timeout_s=4.0)
+        if ok:
+            self._npu_resident = False
+            return True
+        return False
+
+    def start_background_preload(self, timeout_s: float = 120.0) -> None:
+        """Load Gemma on NPU in a daemon thread (speech_loop never waits for first load)."""
+        self.start_prewarm_background(timeout_s=timeout_s)
+
+    def _trace(self, event: str, detail: str = "") -> None:
+        try:
+            import gemy_trace
+            gemy_trace.trace(event, detail)
+        except ImportError:
+            pass
+
+    def cancel_prewarm(self, wait_s: float = 3.0) -> bool:
+        """Stop background P| preload so Moonshine can use the NPU (avoid killing worker mid-load)."""
+        self._trace("prewarm_cancel", f"wait={wait_s:.1f}s")
+        self._prewarm_cancel.set()
+        deadline = time.time() + max(0.1, float(wait_s))
+        while self._prewarm_busy and time.time() < deadline:
+            time.sleep(0.05)
+        if self._prewarm_busy:
+            self._trace("prewarm_cancel_timeout", "abort worker")
+            self._abort_classify(reason="cancel_prewarm_timeout")
+            return False
+        self._trace("prewarm_cancel_ok", "")
+        return True
+
+    def start_prewarm_background(self, timeout_s: float = 45.0) -> None:
+        """Try to load Gemma on NPU between phrases (listen will cancel via ensure_npu)."""
+        if self._prewarm_busy:
+            self._trace("prewarm_skip", "already busy")
+            return
+        self._prewarm_cancel.clear()
+        self._trace("prewarm_scheduled", f"timeout={timeout_s:.0f}s")
+
+        def _run():
+            if self._prewarm_cancel.is_set():
+                self._trace("prewarm_aborted", "cancel before start")
+                return
+            if self._npu_resident or self._classify_busy:
+                self._trace("prewarm_skip", "npu busy or classifying")
+                return
+            if self._state == "idle":
+                self._trace("prewarm_warm_worker", "")
+                self.warm_worker()
+            if self._prewarm_cancel.is_set():
+                return
+            if not self._ready.wait(timeout=min(30.0, timeout_s)):
+                self._trace("prewarm_fail", "worker not READY in time")
+                return
+            if self._npu_resident or self._prewarm_cancel.is_set():
+                return
+            self._prewarm_busy = True
+            try:
+                # Chunked P| so cancel_prewarm can stop between attempts (full load may retry).
+                chunk = min(15.0, float(timeout_s))
+                left = float(timeout_s)
+                attempt = 0
+                while left > 0 and not self._prewarm_cancel.is_set():
+                    attempt += 1
+                    self._trace("prewarm_P_start", f"attempt={attempt} chunk={chunk:.0f}s left={left:.0f}s")
+                    t0 = time.time()
+                    if self._worker_command("P|", timeout_s=chunk):
+                        self._model_loaded = True
+                        self._npu_resident = True
+                        self._trace("prewarm_P_ok", f"{time.time() - t0:.1f}s")
+                        return
+                    self._trace("prewarm_P_chunk_fail", f"{time.time() - t0:.1f}s left={left:.0f}s")
+                    left -= chunk
+                if self._prewarm_cancel.is_set():
+                    self._trace("prewarm_aborted", "cancel during P|")
+            finally:
+                self._prewarm_busy = False
+
+        threading.Thread(target=_run, name="gemma-prewarm", daemon=True).start()
+
+    def _worker_command(self, cmd: str, timeout_s: float = 4.0) -> bool:
+        if not self._proc or self._proc.poll() is not None or not self.ready:
+            self._trace("worker_cmd_skip", f"{cmd!r} proc={self._proc!r} ready={self.ready}")
+            return False
+        self._trace("worker_cmd_start", f"{cmd!r} timeout={timeout_s:.0f}s")
+        result: list[bool] = [False]
+
+        def _io():
+            try:
+                with self._io_lock:
+                    self._proc.stdin.write(f"{cmd}\n")
+                    self._proc.stdin.flush()
+                    deadline = time.time() + timeout_s
+                    while time.time() < deadline:
+                        raw = self._proc.stdout.readline()
+                        if not raw:
+                            break
+                        line = raw.strip()
+                        if line in ("OK", "READY"):
+                            result[0] = True
+                            return
+                        if line.startswith("L|"):
+                            return
+                        if line == "FAIL":
+                            return
+            except Exception:
+                pass
+
+        th = threading.Thread(target=_io, name="gemma-cmd", daemon=True)
+        th.start()
+        th.join(timeout=timeout_s + 0.5)
+        if th.is_alive():
+            self._trace("worker_cmd_hung", f"{cmd!r} >{timeout_s:.0f}s")
+            return False
+        ok = result[0]
+        self._trace("worker_cmd_done", f"{cmd!r} ok={ok}")
+        return ok
 
     def _abort_classify(self, reason: str = "abort") -> None:
-        """Kill worker mid-inference so Moonshine can use the NPU again."""
+        """Kill worker mid-inference or when soft release fails."""
+        self._trace("worker_abort", f"reason={reason} state={self._state}")
         try:
             import gemy_diag
             gemy_diag.log("gemma_abort", f"reason={reason} state={self._state}")
         except Exception:
             pass
         self._classify_busy = False
+        self._prewarm_busy = False
+        self._npu_resident = False
         if self._proc and self._proc.poll() is None:
             try:
                 self._proc.kill()
@@ -281,6 +533,11 @@ class GemmaMoodSubprocess:
         self._state = "idle"
         self._ready.clear()
         self._error = None
+        try:
+            import hat
+            hat.force_all_off()
+        except Exception:
+            pass
 
     def acquire_npu(self, wait: bool = True) -> bool:
         """Start worker and wait until Gemma is loaded on the NPU."""
@@ -447,23 +704,26 @@ class GemmaMoodSubprocess:
                 err_box[0] = str(e)
 
         self._classify_busy = True
+        t0 = time.time()
+        self._trace("classify_C_start", f"timeout={infer_timeout_s:.0f}s text={safe[:40]!r}")
         try:
             t = threading.Thread(target=_do_io, name="gemma-classify", daemon=True)
             t.start()
             t.join(timeout=infer_timeout_s + 0.5)
             if t.is_alive():
+                self._trace("classify_C_hung", f">{infer_timeout_s:.0f}s")
                 print(
                     f"[gemma] assist timed out ({infer_timeout_s:.0f}s); "
                     "freeing NPU for ears.",
                     flush=True,
                 )
                 self._abort_classify(reason="classify_timeout")
-                self._assist_cooldown_until = time.time() + 45.0
+                self._assist_cooldown_until = time.time() + 20.0
                 return None
             if err_box[0]:
                 print(f"[gemma] worker classify I/O failed: {err_box[0]}", flush=True)
                 self._abort_classify(reason="worker_fail")
-                self._assist_cooldown_until = time.time() + 45.0
+                self._assist_cooldown_until = time.time() + 20.0
                 return None
             if junk_box:
                 print(
@@ -479,12 +739,15 @@ class GemmaMoodSubprocess:
                 except Exception:
                     pass
                 self._abort_classify(reason="junk_stdout")
-                self._assist_cooldown_until = time.time() + 45.0
+                self._assist_cooldown_until = time.time() + 20.0
                 return None
             line = line_box[0] or ""
             if not line.startswith("L|"):
                 return None
             label = mood_for_reaction(line[2:].strip())
+            self._model_loaded = True
+            self._npu_resident = True
+            self._trace("classify_C_ok", f"{time.time() - t0:.1f}s label={label!r}")
             try:
                 import gemy_diag
                 gemy_diag.log("gemma_classify", f"label={label!r}")

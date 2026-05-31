@@ -144,8 +144,10 @@ function Invoke-HubRoute {
                 if ($req.HttpMethod -ne 'POST') { break }
                 $body = Read-RequestJson $Context
                 $noVision = $false
+                $noGemmaMood = $false
                 if ($body.PSObject.Properties['noVision']) { $noVision = [bool]$body.noVision }
-                $r = Invoke-HubStartGemy -NoVision:$noVision
+                if ($body.PSObject.Properties['noGemmaMood']) { $noGemmaMood = [bool]$body.noGemmaMood }
+                $r = Invoke-HubStartGemy -NoVision:$noVision -NoGemmaMood:$noGemmaMood
                 Write-JsonResponse $Context @{
                     ok = $r.ok; message = $r.message
                     health = (Get-HubHealthDto); activity = (Get-HubActivityLog)

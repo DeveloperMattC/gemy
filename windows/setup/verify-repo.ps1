@@ -5,6 +5,12 @@ $root = Get-RobotRepoRoot
 $ok = $true
 $checks = @(
     @("board\python\greeter.py"),
+    @("board\python\gemy_classify.py"),
+    @("board\python\gemy_empathy.py"),
+    @("board\python\gemy_fallback.py"),
+    @("board\python\gemy_math.py"),
+    @("board\python\gemy_qa.py"),
+    @("board\python\gemy_trace.py"),
     @("board\python\hat.py"),
     @("board\python\gemy-watcher.py"),
     @("board\shell\gemy-boot.sh"),
@@ -21,7 +27,14 @@ $checks = @(
     @("windows\demos\hat-gui.ps1"),
     @("windows\setup\cleanup-board.ps1"),
     @("windows\setup\test-gemy.ps1"),
+    @("board\python\test_gemy_blackbox.py"),
     @("board\python\test_gemy_unit.py"),
+    @("board\python\test_gemy_math.py"),
+    @("board\python\test_gemy_qa.py"),
+    @("board\python\test_gemy_perf.py"),
+    @("board\python\test_gemy_stability.py"),
+    @("board\python\test_gemy_heartbeat_smoke.py"),
+    @("board\python\gemy_heartbeat_smoke.py"),
     @("board\python\gemy_smoke_test.py"),
     @("drivers\ncm\coral-ncm-drv\coral-ncm.inf"),
     @("docs\CORALBOARD-GUIDE.md")

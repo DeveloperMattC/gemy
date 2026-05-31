@@ -17,9 +17,9 @@
 | **gemy** | Says the name: "Gemy", "Jemmy" | *Ge-my!* three notes | Mini **rainbow** |
 | **greet** | "hello", "hi", wave, hand-up | Friendly double beep | **Rainbow** sweep |
 | **funny** | "haha", jokes, knock-knock punchline, chicken joke | Ha-ha-ha + giggle bursts | Rapid **green** flashes + green/blue joy flash |
-| **nice** | "thanks", "love you", "awesome" | Happy rising beeps | **Rainbow** + green/blue sparkle |
+| **nice** | "thanks", "love you", "I'm happy" (empathy) | **Woohoo** rising beeps (7 notes, longer each time) | **Green** on every cheer |
 | **mean** | "stupid", "hate you", "shut up" | Louder sad descending beeps | **Red** slow blinks |
-| **sad** | "nobody likes you", "sad news", "lonely" | Quiet whimpers | **Blue** cry flashes |
+| **sad** | "I am sad", "I'm tired/sleepy", lonely, bad news | Blue **crying** sobs (7 whimper beeps, two sniffle waves) | **Blue** on every sob |
 | **yes** | "yeah", "for sure", "I agree" | One beep | **One green** light beep |
 | **no** | "nope", "no way", "not really" | Two beeps | **Two red** light beeps |
 | **neutral** | Anything else / Gemma unsure | One soft beep | Gentle **rainbow** |
@@ -33,20 +33,27 @@ Vision (wave / hand-up) always uses **greet** (rainbow + beep).
 
 ```
 1. Turn off?        → off
-2. Yes?             → yes
-3. No?              → no
-4. Math quiz?       → yes/no (plus, times, “is it equal to …” follow-up)
-5. Joke in progress?→ funny (knock-knock / riddle tracker)
-6. Name "Gemy"?     → gemy
-7. Keywords         → mean, sad, funny, nice, greet
-8. Small-talk       → "how are you", "great to hear", etc. → greet / nice (no Gemma)
-9. Gemma assist     → only if --gemma-mood and steps 7–8 found nothing
-10. Else            → neutral
+2. Math quiz?       → yes/no (plus/minus/times/divide, follow-up “is it equal to …”)
+3. Fact question?   → yes/no (curated facts, comparisons, robot checks — else neutral)
+4. Yes?             → yes (not stolen from “is … correct?” questions)
+5. No?              → no
+6. Joke in progress?→ funny (knock-knock / riddle tracker)
+7. Name "Gemy"?     → gemy
+8. Keywords         → mean, sad, funny, nice, greet
+9. Small-talk       → "how are you", "great to hear", etc. → greet / nice (no Gemma)
+10. Gemma assist    → only if not open-ended, not incomplete STT, rate limit OK
+11. Else            → neutral (honest “not sure” beep)
 ```
 
-**Math examples (no Gemma):** “is one plus one two” → yes; “is 7 times 6 equal to 44” → no; then “is it equal to 42” → yes.
+**Before classify:** split STT lines may merge (`is the moon` + `made of cheese`) via `gemy_phrase_buffer` (5 s window).
+
+**Before Gemma:** open questions → neutral; **incomplete** stubs → neutral; **local Q&A** (sky colors, moon+cheese, `made out of` → `made of`) → yes/no with **no NPU**; `should_skip_gemma_assist()` blocks Gemma if a local answer exists.
+
+**Math examples (no Gemma):** “is one plus one two” → yes; “is 7 times 6 equal to 44” → no; then “is it equal to 42” → yes. Also plus/minus/times/divide, digits, teens (eleven–nineteen), and “what is 3 add 4 equal to 7”.
 
 **Gemma never runs before keywords or math rules.** That keeps jokes, insults, and quizzes fast.
+
+**Beep-only:** Gemy cannot say words or invent buzzer patterns. Open questions ("what is the capital of France") → **neutral**. Gemma is a **label picker** only: it must output exactly one word from `gemy greet funny nice mean sad yes no off neutral` (see `gemma_mood.ALLOWED_LABELS_LINE`). Sentences, facts, or unknown words → **neutral** via `normalize_mood_label()` + `gemy_reactions.gemma_label_to_beep_kind()`. Rule: `.cursor/rules/gemy-beep-only.mdc`.
 
 ---
 
@@ -63,15 +70,18 @@ Vision (wave / hand-up) always uses **greet** (rainbow + beep).
 | Rule | Why |
 |------|-----|
 | **Session heartbeat** | Red LED blinks ~every 1.6 s for the whole run (skipped during hat reactions only) |
-| **NPU before listen** | `release_npu()` kills any Gemma worker before `listen_once` |
-| **NPU after assist** | `finish_assist()` always kills worker after each attempt (success or fail) |
-| **5 s assist cap** | Ears thread never blocks longer; timeout kills worker |
-| **When Gemma runs** | ≥4 words or ≥20 chars; not fragments; not during knock-knock; **≥90 s** between assists |
+| **NPU before listen** | `ensure_npu_for_ears()` only when model is on NPU (`_npu_resident`) or classify/prewarm busy — idle worker is OK |
+| **Warm worker + background preload** | ~2 s after `[ears]`: worker + **`P|`** in daemon thread — **speech never waits** for first load |
+| **Assist only if `_model_loaded`** | Until preload done → neutral + log line (no 90s block on ears thread) |
+| **NPU after assist** | `finish_assist()` sends **`R|`** (unload model, **keep worker**) — not kill unless release fails |
+| **Worker protocol** | `P|` preload, `R|` release, `C|` classify, stdout `READY` / `OK` / `L|` only |
+| **Assist timeouts** | After model loaded: up to **12 s** per check; timeout → kill worker + cooldown |
+| **When Gemma runs** | ≥3 words or ≥14 chars; not incomplete question; not open trivia; **≥40 s** between assists |
 | **listen_once cap** | **60 s** max wait per phrase; then mic reset and listen again |
-| **Stuck guard** | `listen_wait` **>45 s** or Gemma/react hang → reset mic + kill Gemma worker |
-| Worker logs on **stderr** only | stdout is `READY` / `L|` only (no accidental NPU load “in background”) |
+| **Stuck guard** | `listen_wait` **>45 s** or Gemma **>20 s** (first load **>100 s**) → recover mic + release NPU |
+| Worker logs on **stderr** only | stdout is protocol lines only |
 
-Small-talk ("how are you", "great to hear") and short STT fragments ("Go") → **neutral**, no Gemma.
+Incomplete STT (`is the sky` without `green`) → **neutral**, skip Gemma. See [LEARNINGS.md](LEARNINGS.md).
 
 Invalid Gemma word → **neutral**, no crash (`mood_for_reaction`, `resolve_reaction_kind`).
 
@@ -93,13 +103,17 @@ See `.cursor/rules/gemy-hardware-safety.mdc` and `.cursor/rules/coralboard-stabi
 
 | File | Role |
 |------|------|
-| `board/python/greeter.py` | Main app: vision, speech loop, keywords, math, reactions |
+| `board/python/greeter.py` | Main app: vision, speech loop, keywords, reactions |
+| `board/python/gemy_math.py` | Fast math quizzes (yes/no, no NPU) |
+| `board/python/gemy_qa.py` | Safe fact Q&A, `norm_qa`, topic patterns, skip-Gemma guard |
+| `board/python/gemy_phrase_buffer.py` | Merge split quiz phrases across listens |
 | `board/python/hat.py` | Buzzer, LEDs, `gemy_funny`, `gemy_greet`, … |
 | `board/python/gemma_mood.py` | Prompt, `normalize_mood_label`, subprocess worker |
 | `board/python/gemma_mood_worker.py` | Isolated Gemma process |
 | `board/python/gemy_stability.py` | NPU rules, listen/Gemma timeouts, stuck recovery |
-| `windows/demos/greet-demo.ps1` | Push 6 Python files + start greeter |
-| `windows/hub/` | Control Center (browser UI) |
+| `windows/demos/greet-demo.ps1` | Push Python files + start greeter |
+| `recover-board.ps1` | Emergency: kill greeter + Gemma worker, buzzer/LED off |
+| `windows/hub/` | Control Center — **Start Gemy — voice, no Gemma (stable)** |
 | `windows/lib/GemyFeatures.ps1` | Boot autostart flag (default **off**) |
 
 ---

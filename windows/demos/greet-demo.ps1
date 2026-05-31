@@ -8,6 +8,7 @@ param(
     [switch]$SkipCleanup,
     [switch]$NoGemmaMood,
     [switch]$GemmaMood,
+    [switch]$GemmaMoodAssist,
     [switch]$GemmaMoodSerial,
     [switch]$GemmaMoodSync
 )
@@ -29,12 +30,14 @@ function Test-AdbBoard {
 
 Write-Host ""
 Write-Host "  Gemy - Coralboard greeting robot" -ForegroundColor Green
-$mood = if ($NoGemmaMood -or (-not $GemmaMood -and -not $GemmaMoodSerial)) {
-    "keyword moods -> beeps"
+$mood = if ($GemmaMoodAssist) {
+    "keywords + Gemma assist on neutral (experimental NPU)"
+} elseif ($NoGemmaMood -or (-not $GemmaMood -and -not $GemmaMoodSerial)) {
+    "local moods only (closest/neutral, no NPU)"
 } elseif ($GemmaMoodSerial) {
     "keywords + Gemma serial (experimental)"
 } else {
-    "keywords + Gemma assist"
+    "local moods only (closest/neutral, no NPU)"
 }
 $mode = if ($NoVision) { "voice only - $mood" } else { "voice + camera - $mood" }
 Write-Host "  (push + cleanup + Moonshine + $mode)" -ForegroundColor DarkGray
@@ -54,7 +57,10 @@ Write-Step "Waiting for board..."
 Write-Step "Pushing latest scripts to /home/root/ ..."
 $pushList = @(
     "greeter.py", "hat.py", "gemma_mood.py", "gemma_mood_worker.py",
-    "gemy_diag.py", "gemy_stability.py"
+    "gemy_diag.py", "gemy_trace.py", "gemy_stability.py",     "gemy_empathy.py", "gemy_fallback.py", "gemy_classify.py",
+    "gemy_math.py", "gemy_qa.py",
+    "gemy_phrase_buffer.py",
+    "gemy_heartbeat_smoke.py", "gemy_reactions.py"
 )
 $missing = @()
 foreach ($f in $pushList) {
@@ -108,10 +114,9 @@ $py = "/home/root/sl2610-examples/.venv/bin/python3"
 $opts = "--sensitivity $Sensitivity --cooldown 3 --pc-start"
 if ($NoSpeech) { $opts += " --no-speech" }
 if ($NoVision) { $opts += " --no-vision" }
-if ($NoGemmaMood) {
-    $opts += " --no-gemma-mood"
-} else {
-    $opts += " --gemma-mood"
+$opts += " --no-gemma-mood"
+if ($GemmaMoodAssist) {
+    $opts += " --gemma-mood-assist"
 }
 if ($GemmaMoodSerial) {
     Write-Host "  Note: -GemmaMoodSerial is ignored (causes NPU freezes). Using keyword moods." -ForegroundColor Yellow
@@ -125,15 +130,15 @@ if ($NoVision) {
 } else {
     Write-Host "  Wave / hand-up / voice. Say Gemy, hello, jokes, compliments, or insults."
 }
-Write-Host "  Wait for [ears] listening (~15s). Yes/no, jokes, nice/mean/sad -> beeps/LEDs; Gemma helps if unclear."
-if (-not $NoGemmaMood) {
-    Write-Host "  Gemma assist ON (long unclear phrases only; 5s cap; NPU freed each listen)."
-    Write-Host "  Session heartbeat ON; listen capped at 60s (mic auto-reset if hung)."
-}
+Write-Host "  Wait for [ears] listening (~15s). Every phrase -> beep (exact, closest, or neutral)."
+Write-Host "  No NPU for mood by default (stable). -GemmaMoodAssist for experimental Gemma."
+Write-Host "  Session heartbeat ON; listen capped at 60s (mic auto-reset if hung)."
 Write-Host "  Say Gemy turn off to stop."
 Write-Host "  Short hello beep, then listening."
-Write-Host "  [diag] lines every 20s + each listen/react (copy log if it freezes)." -ForegroundColor DarkGray
+Write-Host "  [trace] always on -> /home/root/gemy.log; [diag] extra with --pc-start." -ForegroundColor DarkGray
+Write-Host "  After freeze: adb shell tail -80 /home/root/gemy.log" -ForegroundColor DarkGray
 Write-Host ""
 
-& adb shell -t $cmd
+# Tee to board log so crashes after "hi Gemy" are visible: adb shell tail -80 /home/root/gemy.log
+& adb shell -t "$cmd 2>&1 | tee -a /home/root/gemy.log"
 exit $LASTEXITCODE

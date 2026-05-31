@@ -6,6 +6,8 @@ Hands-on lab for **Synaptics Coralboard (SL2610) + Sensor HAT** on Windows.
 
 ## Start here (everyone)
 
+**[PROJECT-STATUS.md](PROJECT-STATUS.md)** — goals, what works today, what we finished, what to try next.
+
 **[CODE-JAM.md](CODE-JAM.md)** — Google Code Jam-style rounds, scorecard, pass/fail checks. ~90 minutes.
 
 ---
@@ -28,6 +30,7 @@ Hands-on lab for **Synaptics Coralboard (SL2610) + Sensor HAT** on Windows.
 | [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md) | Moods, Gemma assist, flags |
 | [07-WAVE-VISION-AND-GEMMA.md](07-WAVE-VISION-AND-GEMMA.md) | Wave = OpenCV; Gemma = text only |
 | [04-TROUBLESHOOTING.md](04-TROUBLESHOOTING.md) | Buzzer stuck, no ears, camera busy |
+| [LEARNINGS.md](LEARNINGS.md) | **Stability lessons** + dated incident log |
 | [02-HOW-WE-CODED-IT.md](02-HOW-WE-CODED-IT.md) | Implementation notes |
 | [03-ARCHITECTURE.md](03-ARCHITECTURE.md) | Threads and data flow |
 | [06-STANDALONE-GEMY.md](06-STANDALONE-GEMY.md) | USER button, no PC |
