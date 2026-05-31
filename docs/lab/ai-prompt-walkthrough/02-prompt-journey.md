@@ -1,50 +1,46 @@
 # Prompt journey — build Gemy step by step
 
-**How to use:** For each step, paste the prompt into your AI (Cursor chat). Let it create or change files. Then run the **Try it** line in PowerShell or on the board. Wait for the checkpoint before moving on.
+**How to use:** Paste each prompt into Cursor. Run the **Try it** command. Pass the checkpoint before the next step.
+
+**Jam map:** [../CODE-JAM.md](../CODE-JAM.md)
 
 ---
 
-## Step 1 — Meet the project (5 min)
+## Step 1 — Plug in (Round 0)
 
-**Say to the room:** “We’re going to teach a robot named Gemy to see, hear, and react — using AI to write the code for us.”
+**Say:** "We teach a robot named Gemy to hear and react — AI writes the code."
 
-### Prompt 1A — orient the AI
-
-```
-I'm doing a code jam with a Coralboard SL2610 and Sensor HAT (camera, mic, buzzer, red/green/blue LEDs). The project is the gemy-coralboard-lab repo. Please read README.md and docs/CORALBOARD-GUIDE.md and give me a 5-bullet summary of what this repo does in plain English. No jargon.
-```
-
-**You should see:** A short summary mentioning Gemy, ADB, Control Center, and the HAT.
-
-### Prompt 1B — check the board is connected
+### Prompt 1A
 
 ```
-Help me verify ADB works. Give me the exact PowerShell commands to run from the repo root, and what success looks like. My board is plugged in via USB-C.
+I'm in the Gemy Code Jam with a Coralboard SL2610 + Sensor HAT. Read README.md and docs/lab/CODE-JAM.md. Give me a 5-bullet summary in plain English.
 ```
 
-**Try it (PowerShell, repo root):**
+### Prompt 1B
+
+```
+Help me verify ADB. Exact PowerShell from repo root. What does success look like?
+```
+
+**Try it:**
 
 ```powershell
 adb devices
+powershell -ExecutionPolicy Bypass -File make-shortcut.ps1
 ```
 
-**Checkpoint:** A line ending in `device` (not `unauthorized`).
+**Pass:** `device` in adb list; Control Center opens in browser.
 
 ---
 
-## Step 2 — Make the buzzer and lights obey you (15 min)
+## Step 2 — Body language (Round 1)
 
-**Say to the room:** “First we teach the robot body language — beeps and colors — one command at a time.”
+**Say:** "First the robot body — beeps and colors."
 
-### Prompt 2A — create hat.py
+### Prompt 2A
 
 ```
-Create board/python/hat.py for the Coralboard Sensor HAT:
-- Buzzer on GPIO BUZZERn (active low). IMPORTANT: gpioset latches on this board — every beep must end with the line driven HIGH (off).
-- LEDs via /sys/class/leds red/green/blue:status
-- Commands: beep, beep N, r2d2, siren, led, blink, rainbow, photo (camera needs venv OpenCV and fix dark OV5647 by setting exposure on /dev/v4l-subdev2 after stream starts)
-- CLI: python3 hat.py beep, etc.
-Keep it one file, well commented for beginners.
+Explain board/python/hat.py for beginners: buzzer, RGB LEDs, rainbow, photo. How do I test via adb push and adb shell commands from repo root?
 ```
 
 **Try it:**
@@ -52,37 +48,21 @@ Keep it one file, well commented for beginners.
 ```powershell
 adb push board\python\hat.py /home/root/hat.py
 adb shell python3 /home/root/hat.py beep
-adb shell python3 /home/root/hat.py led green on
-adb shell python3 /home/root/hat.py led all off
+adb shell python3 /home/root/hat.py rainbow
 ```
 
-**Checkpoint:** You hear one short beep; green LED turns on then off.
+Or: Control Center → **HAT test panel** → Beep, Rainbow, STOP.
 
-### Prompt 2B — add fun buzzer patterns
-
-```
-Add to board/python/hat.py: r2d2, chirp, warble, alarm, and sos buzzer patterns (rhythm only, no pitch change). Ensure buzzer always ends OFF.
-```
-
-**Try it:**
-
-```powershell
-adb push board\python\hat.py /home/root/hat.py
-adb shell python3 /home/root/hat.py r2d2
-```
-
-**Checkpoint:** A burst of short robotic beeps, then silence.
+**Pass:** Beep heard; rainbow seen; buzzer stops on STOP.
 
 ---
 
-## Step 3 — Point-and-click HAT tester (10 min)
+## Step 3 — HAT buttons (optional)
 
-**Say to the room:** “Now we get buttons on the laptop so we don’t have to memorize commands.”
-
-### Prompt 3A — Windows HAT GUI
+### Prompt 3A
 
 ```
-Create windows/demos/hat-gui.ps1: a WinForms GUI that runs hat.py on the board via adb. Buttons for beep, beep x3, tone, siren, r2d2, warble, chirp, alarm, sos, red/green/blue LEDs, rainbow, take photo (venv python), and red STOP for buzzer off. Fix PowerShell $args collision by not naming a parameter $args. Push hat.py before camera commands.
+How do I open hat-gui.ps1 from this repo? What buttons should I click to test beep and STOP?
 ```
 
 **Try it:**
@@ -91,176 +71,109 @@ Create windows/demos/hat-gui.ps1: a WinForms GUI that runs hat.py on the board v
 powershell -ExecutionPolicy Bypass -File hat-gui.ps1
 ```
 
-**Checkpoint:** A window opens; **Beep** makes a short sound; **STOP** silences the buzzer.
+**Pass:** Window opens; STOP silences buzzer.
 
 ---
 
-## Step 4 — Wave at the robot (15 min)
+## Step 4 — Gemy hears you (Round 2)
 
-**Say to the room:** “Gemy will notice when you wave — using the camera, not magic.”
+**Say:** "Ears use Moonshine on the mic. Moods use keyword lists first — Gemma only helps when unclear."
 
-### Prompt 4A — wave detector
+### Prompt 4A
 
 ```
-Create board/python/wave_detect.py: OpenCV on /dev/video0, motion detection, count horizontal reversals to detect a waving hand, then call hat.beep(2). Use hat.py from same folder. Include --sensitivity low|medium|high. Cap processing so it doesn't hog CPU. Always release camera and buzzer off on exit.
+Explain board/python/greeter.py for the Code Jam: speech, moods, how to start with greet-demo.ps1 or Control Center. What line means ready? What should I say to test?
 ```
 
 **Try it:**
 
 ```powershell
-adb push board\python\wave_detect.py board\python\hat.py /home/root/
-powershell -ExecutionPolicy Bypass -File wave-demo.ps1
-```
-
-Wave at the camera, then press **Ctrl+C**.
-
-**Checkpoint:** Double beep when you wave; stops when you end the demo.
-
----
-
-## Step 5 — Gemy hears you (20 min)
-
-**Say to the room:** “We add ears. The board already has speech AI from the Gemma demos — we reuse it.”
-
-### Prompt 5A — greeter with voice
-
-```
-Create board/python/greeter.py named Gemy:
-- Import hat.py and sl2610-examples utils.speech (Moonshine + Silero VAD)
-- Listen for speech; classify into: gemy (name), greet (hello/hi), funny (haha/lol), nice (thanks/good/love), mean (stupid/hate), neutral (anything else)
-- Reactions: gemy = signature 3-note beep + green-blue-green LEDs; greet = double beep + green; funny = r2d2 + rainbow; nice = happy beeps + green/blue alternate; mean = sad beeps + red; neutral = one beep + blue
-- Vision thread: same wave + hand-held-up detection as before
-- Load speech model BEFORE camera loop; cap vision --fps 5; kill stale wave_detect on startup
-- 1 second cooldown between reactions; idle watchdog turns all off after 20s quiet
-```
-
-**Try it:**
-
-```powershell
-adb push board\python\greeter.py board\python\hat.py /home/root/
 powershell -ExecutionPolicy Bypass -File cleanup-board.ps1
 powershell -ExecutionPolicy Bypass -File greet-demo.ps1
 ```
 
-Wait for `[ears] listening`. Say **“Gemy”**, then **“hello”**, then **“that is funny haha”**.
+Wait for `[ears] listening`. Say **Gemy**, **hello**, **haha that's funny**.
 
-**Checkpoint:** Terminal shows `[ears] heard: ... -> gemy` (or greet/funny/etc.) and the board reacts.
+**Pass:** Log shows `[ears] heard:` and board reacts.
 
 ---
 
-## Step 6 — Control Center on your desktop (10 min)
+## Step 5 — Eyes (Round 3)
 
-**Say to the room:** “One window to rule all demos — for the jam and for homework.”
+**Say:** "Waves use camera math (OpenCV), not Gemma."
 
-### Prompt 6A — hub + shortcut
+### Prompt 5A
 
 ```
-Create windows/hub/coralboard-hub.ps1 WinForms Control Center:
-- Button 0 red: Clean up board (runs windows/setup/cleanup-board.ps1)
-- Buttons: 1 internet NCM, 2 hat-gui, 3 Gemy greet-demo, 4 webrtc, 5 push images, 6 image classify, 7 Gemma voice, 8 adb shell
-- Use windows/lib/Repo.ps1 Join-RobotPath for all script paths
-- Show board connected + usb0 IP on refresh
-Create windows/hub/make-shortcut.ps1 for desktop shortcut.
-Create root-level thin .ps1 launchers that forward to windows/ scripts for backward compatibility.
+How do I start Gemy with camera + voice from Control Center or greet-demo.ps1? How does wave and hand-up detection work in greeter.py? One paragraph, no jargon.
+```
+
+**Try it:** Control Center → **Start Gemy — camera + voice**. Wave, then say **hello**.
+
+**Pass:** Wave triggers greet; voice still works.
+
+Read: [../07-WAVE-VISION-AND-GEMMA.md](../07-WAVE-VISION-AND-GEMMA.md)
+
+---
+
+## Step 6 — Full vibes (Round 4)
+
+**Say:** "Every mood — mean is red, sad is blue."
+
+### Prompt 6A
+
+```
+Walk me through the CODE-JAM Round 4 test script: insult, sad phrase, yes, no, joke, turn off. What should I see for each?
+```
+
+**Try it:** Say each line from [../CODE-JAM.md](../CODE-JAM.md) Round 4 table.
+
+**Pass:** 5+ moods; cleanup when done.
+
+---
+
+## Step 7 — Control Center (host demo)
+
+### Prompt 7A
+
+```
+What does coralboard-hub.ps1 / Control Center do? List the main buttons and when to use cleanup-board.ps1.
 ```
 
 **Try it:**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File make-shortcut.ps1
 powershell -ExecutionPolicy Bypass -File coralboard-hub.ps1
 ```
 
-**Checkpoint:** Hub opens; **0. Clean up** then **3. Gemy** launches the greeter.
+**Pass:** Start Gemy from browser; cleanup works.
 
 ---
 
-## Step 7 — Cleanup helper (5 min)
+## Step 8 — Bonus: your phrase
 
-**Say to the room:** “Voice breaks if an old demo still holds the camera. This button fixes that.”
-
-### Prompt 7A — cleanup-board
+### Prompt 8A
 
 ```
-Create windows/setup/cleanup-board.ps1: adb wait-for-device, kill wave_detect.py and greeter.py and webrtc, free /dev/video0, gpioset buzzer off, hat led all off, print clear status. Used before starting Gemy.
-Update greet-demo.ps1 to call cleanup-board first and push from board/python/.
+Add one new keyword to greeter.py so Gemy reacts when I say "you rock". Minimal change. Tell me push + restart steps.
 ```
 
-**Try it:**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File cleanup-board.ps1
-```
-
-**Checkpoint:** Message says camera free, no old demos.
+**Pass:** Custom phrase works after restart.
 
 ---
 
-## Step 8 — Gemy works without a laptop (10 min, optional)
+## Step 9 — Final demo
 
-**Say to the room:** “The board has a USER button. We can press it to start Gemy like a toy.”
+1. Cleanup → **Start Gemy — camera + voice**  
+2. **Gemy** → **You are awesome** → **Haha funny** → **wave**  
+3. Cleanup  
 
-### Prompt 8A — standalone
-
-```
-Create board/python/gemy-watcher.py: read USER button from /dev/input/event0 (Enter key), toggle greeter.py on/off, play gemy signature on start. Add board/systemd/gemy-watcher.service and gemy-autostart.service. Create windows/setup/install-gemy-standalone.ps1 to push files and enable watcher. Document in docs/CORALBOARD-GUIDE.md.
-```
-
-**Try it (once while USB connected):**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File install-gemy-standalone.ps1
-```
-
-Unplug from PC data (or use a USB charger). Press **USER** on the board.
-
-**Checkpoint:** Signature beep; say “Gemy” and it responds.
-
----
-
-## Step 9 — Organize the repo (5 min, optional)
-
-**Say to the room:** “Real projects keep files in folders. We’ll ask AI to tidy without breaking paths.”
-
-### Prompt 9A — structure
+### Prompt 9 — reflection
 
 ```
-Reorganize this repo: board/python, board/shell, board/systemd, windows/hub, windows/demos, windows/setup, windows/lib/Repo.ps1, drivers/ncm, drivers/cp210x, docs/, assets/, logs/. Move files, update all paths, keep root .ps1 as forwarders. Add windows/setup/verify-repo.ps1. Update README and docs. Do not break adb push paths on the board (/home/root/greeter.py etc).
-```
-
-**Try it:**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File windows\setup\verify-repo.ps1
-```
-
-**Checkpoint:** “All checks passed.”
-
----
-
-## Step 10 — Demo time (10 min)
-
-**Say to the room:** “You built a robot with a name, a personality, and a face. Show your neighbor.”
-
-### Final demo script
-
-1. **Clean up board** (hub button 0)  
-2. **Gemy** (button 3)  
-3. Say: **“Gemy”** → signature hello  
-4. Say: **“You are a good robot”** → nice lights  
-5. Say: **“Haha that is funny”** → rainbow  
-6. **Wave** → greet beep  
-7. **Ctrl+C** — done  
-
-### Prompt 10 — reflection (optional)
-
-```
-I'm a non-engineer who just built Gemy. Write 3 sentences I can put in my code jam submission: what I built, one thing I learned, one surprise. Friendly tone, no jargon.
+I finished the Gemy Code Jam as a non-engineer. Write 3 sentences for my submission: what I built, one thing I learned, one surprise. No jargon.
 ```
 
 ---
 
-## You finished
-
-Technical details: [../02-HOW-WE-CODED-IT.md](../02-HOW-WE-CODED-IT.md)  
-If something broke: [03-fix-it-prompts.md](03-fix-it-prompts.md)
+**Stuck?** [03-fix-it-prompts.md](03-fix-it-prompts.md) · **Details:** [../02-HOW-WE-CODED-IT.md](../02-HOW-WE-CODED-IT.md)

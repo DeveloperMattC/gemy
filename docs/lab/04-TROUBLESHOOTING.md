@@ -26,10 +26,14 @@ Then launch **`greet-demo.ps1`**, not `wave-demo.ps1`.
 Wait until terminal shows:
 
 ```
-[ears] on. Greet ...
+[ears] listening (moods: ...)
 ```
 
-First start: **10–20 seconds** after vision starts.
+First start: **10–20 seconds** for Moonshine. With Gemma assist, unclear phrases are capped at **8 s** then neutral.
+
+**Freeze debugging:** PC `greet-demo.ps1` enables **`[diag]`** logging (phase + 20 s watchdog). Copy the **last `[diag]` line** before the red heartbeat stopped — it shows whether we were stuck in `listen_wait`, `gemma_assist`, `react_*`, etc.
+
+**`gemma_classify bad_line='[gemma] NPU: ...'`** — worker load logs leaked to stdout; greeter thought Gemma was done but the worker kept loading on the NPU (next listen freezes). Fixed: worker logs go to stderr; junk stdout kills the worker; short words like "Go" skip Gemma.
 
 ### Camera starving speech (2 CPU cores)
 If `[ears] on` appears but no transcripts under load:
@@ -103,7 +107,39 @@ Moonshine mis-hears words. Check actual transcript in:
 [ears] heard: '...' -> funny
 ```
 
-Extend `FUNNY` / `NICE` / `MEAN` sets in `greeter.py` if needed.
+Extend keyword sets in `greeter.py` (`FUNNY`, `NICE`, `MEAN`, `SAD`, `_YES_PHRASES`, …). See [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md).
+
+---
+
+## Board frozen / red heartbeat stopped
+
+**Symptom:** No reactions; red **heartbeat** LED (slow blink during load) stopped for a long time; log stuck on `[gemma-worker] loading…` or NPU error.
+
+**Fix:**
+
+1. Control Center → **Stop buzzer and reset board** or `cleanup-board.ps1`.
+2. Restart with keywords only: `greet-demo.ps1 -NoGemmaMood`.
+3. Do not use `--gemma-mood-serial` (disabled in code — causes Moonshine + Gemma NPU fight).
+
+See `.cursor/rules/coralboard-stability-first.mdc`.
+
+---
+
+## Joke heard but no rainbow
+
+**Cause (fixed in current `hat.py`):** `r2d2` and `rainbow` used to run in **parallel**; buzzer held the GPIO lock so LEDs never swept.
+
+**Fix:** Push latest `hat.py` + `greeter.py` (`gemy_funny()` runs sound + rainbow in one lock). Test:
+
+```bash
+python3 /home/root/hat.py rainbow
+```
+
+---
+
+## Gemma returned weird mood / crash
+
+Current code maps unknown labels to **neutral** via `mood_for_reaction` and `resolve_reaction_kind`. If you still see crashes, update `gemma_mood.py` and `greeter.py` from the repo.
 
 ---
 

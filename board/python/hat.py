@@ -14,7 +14,8 @@ Run from the board (any python3 works for buzzer/LED; camera needs OpenCV):
   python3 hat.py chirp                # quick chirps
   python3 hat.py alarm                # slow insistent alarm
   python3 hat.py sos                  # morse SOS
-  python3 hat.py buzzer on            # turn on (~2s, max 5s) then off
+  python3 hat.py buzzer on            # turn on (max 2s) then off
+  python3 hat.py force-off            # emergency: buzzer + all LEDs off
   python3 hat.py buzzer off           # force off
 
   # LEDs (red / green / blue / all)
@@ -37,7 +38,112 @@ You can also import it:
 import argparse
 import subprocess
 import sys
+import threading
 import time
+
+# ---- INVIOLABLE SAFETY (Gemy + all hat.py users) ----------------------------
+# Buzzer or any LED must NEVER stay ON longer than this (seconds). GPIO can latch.
+MAX_OUTPUT_ON_SEC = 2.0
+_LED_PATH = "/sys/class/leds/{color}:status"
+_COLORS = ("red", "green", "blue")
+
+_buzzer_on_at = None
+_led_on_at = {}  # color -> monotonic time LED was turned on
+_safety_lock = threading.Lock()
+_hw_lock = threading.RLock()  # one GPIO user at a time (vision + speech threads)
+_watchdog_started = False
+
+
+def _gpio_buzzer_off_hard():
+    """Drive buzzer line HIGH several times (latched GPIO)."""
+    chip, line = _find_buzzer()
+    for _ in range(4):
+        subprocess.run(
+            ["gpioset", chip, f"{line}=1"],
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
+
+def _cap_sec(sec):
+    return min(float(sec), MAX_OUTPUT_ON_SEC)
+
+
+def _cap_ms(ms):
+    return min(int(ms), int(MAX_OUTPUT_ON_SEC * 1000))
+
+
+def start_safety_watchdog():
+    """Background thread: force buzzer/LEDs off if stuck on > MAX_OUTPUT_ON_SEC."""
+    global _watchdog_started
+    if _watchdog_started:
+        return
+    _watchdog_started = True
+
+    def _loop():
+        while True:
+            time.sleep(0.15)
+            safety_enforce()
+
+    threading.Thread(target=_loop, name="hat-safety", daemon=True).start()
+
+
+def safety_enforce():
+    """Force outputs off when over the time limit (or always safe to call)."""
+    global _buzzer_on_at
+    now = time.monotonic()
+    buzzer_stuck = False
+    with _safety_lock:
+        if _buzzer_on_at is not None and (now - _buzzer_on_at) >= MAX_OUTPUT_ON_SEC:
+            buzzer_stuck = True
+        led_stuck = [c for c, t0 in list(_led_on_at.items())
+                     if (now - t0) >= MAX_OUTPUT_ON_SEC]
+    if buzzer_stuck:
+        with _hw_lock:
+            _gpio_buzzer_off_hard()
+            with _safety_lock:
+                _buzzer_on_at = None
+    for c in led_stuck:
+        _led_set_tracked(c, False)
+
+
+def force_all_off():
+    """Emergency: buzzer off + all LEDs off (clears safety timers)."""
+    global _buzzer_on_at
+    with _hw_lock:
+        _gpio_buzzer_off_hard()
+        with _safety_lock:
+            _buzzer_on_at = None
+            _led_on_at.clear()
+        for c in _COLORS:
+            base = _LED_PATH.format(color=c)
+            _write(f"{base}/trigger", "none")
+            _write(f"{base}/brightness", 0)
+
+
+def hold_led(color, sec, off_gap=0.0):
+    """Turn LED on up to MAX_OUTPUT_ON_SEC, then off (never leaves it latched on)."""
+    sec = _cap_sec(sec)
+    with _hw_lock:
+        led(color, True)
+        time.sleep(sec)
+        led(color, False)
+    if off_gap > 0:
+        time.sleep(off_gap)
+
+
+def pulse_leds(colors, sec, off_gap=0.0):
+    """Turn one or more colors on briefly, then all off."""
+    sec = _cap_sec(sec)
+    if isinstance(colors, str):
+        colors = (colors,)
+    led_off_all()
+    for c in colors:
+        led(c, True)
+    time.sleep(sec)
+    led_off_all()
+    if off_gap > 0:
+        time.sleep(off_gap)
+
 
 # ---- Buzzer -----------------------------------------------------------------
 # HAT buzzer = GPIO line "BUZZERn" (gpiochip0 line 6). It's an ACTIVE buzzer:
@@ -69,10 +175,13 @@ def _find_buzzer():
 
 def _buzzer_set(on):
     """Latch the buzzer ON (drive line LOW) or OFF (drive line HIGH)."""
+    global _buzzer_on_at
     chip, line = _find_buzzer()
     val = 0 if on else 1
     subprocess.run(["gpioset", chip, f"{line}={val}"], check=False,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with _safety_lock:
+        _buzzer_on_at = time.monotonic() if on else None
 
 
 def buzzer_off():
@@ -81,8 +190,8 @@ def buzzer_off():
 
 
 def buzzer_on(hold_sec=2):
-    """Turn the buzzer on for a short hold (max 5s, blocks), then off."""
-    hold_sec = max(0.0, min(float(hold_sec), 5.0))
+    """Turn the buzzer on briefly (max MAX_OUTPUT_ON_SEC), then off."""
+    hold_sec = _cap_sec(hold_sec)
     try:
         _buzzer_set(True)
         time.sleep(hold_sec)
@@ -91,26 +200,31 @@ def buzzer_on(hold_sec=2):
 
 
 def buzzer_pulse(ms):
-    """One tone of `ms` milliseconds, then guaranteed OFF."""
+    """One tone of `ms` milliseconds (capped), then guaranteed OFF."""
+    ms = _cap_ms(ms)
     try:
         _buzzer_set(True)
-        time.sleep(max(0, int(ms)) / 1000.0)
+        time.sleep(ms / 1000.0)
     finally:
         _buzzer_set(False)
 
 
 def _play(pattern):
-    """Play [(on_ms, gap_ms), ...]; always ends with the buzzer OFF."""
-    try:
-        for on_ms, gap_ms in pattern:
-            if on_ms > 0:
-                _buzzer_set(True)
-                time.sleep(on_ms / 1000.0)
-                _buzzer_set(False)
-            if gap_ms > 0:
-                time.sleep(gap_ms / 1000.0)
-    finally:
-        _buzzer_set(False)
+    """Play [(on_ms, gap_ms), ...]; each ON segment capped; always ends OFF."""
+    with _hw_lock:
+        try:
+            for on_ms, gap_ms in pattern:
+                on_ms = _cap_ms(on_ms)
+                if on_ms > 0:
+                    _buzzer_set(True)
+                    time.sleep(on_ms / 1000.0)
+                    _buzzer_set(False)
+                if gap_ms > 0:
+                    time.sleep(gap_ms / 1000.0)
+        finally:
+            _gpio_buzzer_off_hard()
+            with _safety_lock:
+                _buzzer_on_at = None
 
 
 def beep(count=1, on_ms=120, off_ms=100):
@@ -162,12 +276,260 @@ def sos():
     _play(pat)
 
 
+def _run_parallel(buzzer_fn, led_fn):
+    threads = [
+        threading.Thread(target=buzzer_fn, daemon=True),
+        threading.Thread(target=led_fn, daemon=True),
+    ]
+    try:
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        force_all_off()
+
+
+def gemy_intro():
+    """Startup hello (beeps + lights). Each tone <= MAX_OUTPUT_ON_SEC."""
+    with _hw_lock:
+        try:
+            _play([
+                (55, 42), (55, 42), (92, 52),
+                (48, 36), (48, 36), (66, 46),
+                (60, 28), (102, 36), (56, 30), (120, 0),
+            ])
+            for _ in range(2):
+                hold_led("green", 0.11, 0.07)
+            hold_led("blue", 0.12, 0.06)
+            pulse_leds(("green", "blue"), 0.22)
+        finally:
+            force_all_off()
+
+
+def gemy_intro_short():
+    """Quick hello when starting from PC (avoids long beep storm with autostart)."""
+    with _hw_lock:
+        try:
+            _play([(55, 38), (55, 38), (95, 0)])
+            pulse_leds(("green", "blue"), 0.18)
+        finally:
+            force_all_off()
+
+
+def gemy_goodbye():
+    """Shutdown: soft descending beeps + blue fade (bye Gemy)."""
+    def leds():
+        for ms in (0.20, 0.16, 0.12):
+            hold_led("blue", ms, 0.06)
+
+    def beeps():
+        _play([(120, 70), (95, 80), (70, 90), (50, 0)])
+
+    _run_parallel(beeps, leds)
+    force_all_off()
+
+
+def gemy_yes():
+    """Affirmative: one green light beep."""
+    with _hw_lock:
+        try:
+            led("green", True)
+            try:
+                _buzzer_set(True)
+                time.sleep(_cap_sec(0.16))
+            finally:
+                _buzzer_set(False)
+            led("green", False)
+        finally:
+            _hw_release_under_lock()
+
+
+def _leds_off_under_lock():
+    for c in _COLORS:
+        led(c, False)
+
+
+def _rainbow_under_lock(cycles=2, dwell_ms=130):
+    """RGB sweep; caller must hold _hw_lock."""
+    dwell_s = _cap_sec(dwell_ms / 1000.0)
+    for _ in range(max(1, int(cycles))):
+        for c in _COLORS:
+            _leds_off_under_lock()
+            led(c, True)
+            time.sleep(dwell_s)
+            led(c, False)
+
+
+def _hw_release_under_lock():
+    _gpio_buzzer_off_hard()
+    with _safety_lock:
+        _buzzer_on_at = None
+    for c in _COLORS:
+        base = _LED_PATH.format(color=c)
+        _write(f"{base}/trigger", "none")
+        _write(f"{base}/brightness", 0)
+
+
+def gemy_funny():
+    """Joke / laugh: ha-ha-ha bursts + rapid green flashes (giggle, not R2D2)."""
+    with _hw_lock:
+        try:
+            # Three clear "Ha!" then faster giggles (active buzzer = rhythm only).
+            laugh = [
+                (90, 55), (85, 50), (95, 45),
+                (55, 32), (50, 28), (55, 26), (48, 24),
+                (42, 22), (45, 20), (40, 18), (48, 16),
+                (38, 14), (42, 12), (36, 11), (50, 10),
+                (34, 9), (40, 8), (32, 7), (55, 6),
+                (30, 5), (45, 0),
+            ]
+            for on_ms, gap_ms in laugh:
+                on_ms = _cap_ms(on_ms)
+                gap_ms = min(int(gap_ms), 90)
+                led("green", True)
+                if on_ms > 0:
+                    try:
+                        _buzzer_set(True)
+                        time.sleep(on_ms / 1000.0)
+                    finally:
+                        _buzzer_set(False)
+                led("green", False)
+                if gap_ms > 0:
+                    time.sleep(gap_ms / 1000.0)
+            # Joy flash: green + blue together (brief "can't stop laughing").
+            led("green", True)
+            led("blue", True)
+            try:
+                _buzzer_set(True)
+                time.sleep(_cap_sec(0.14))
+            finally:
+                _buzzer_set(False)
+            _leds_off_under_lock()
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_greet():
+    """Hello: rainbow sweep + friendly double beep."""
+    with _hw_lock:
+        try:
+            _rainbow_under_lock(cycles=1, dwell_ms=130)
+            _play([(95, 55), (110, 0)])
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_nice():
+    """Compliment: happy rising beeps + rainbow + green/blue sparkle."""
+    with _hw_lock:
+        try:
+            _play([
+                (40, 48), (52, 40), (64, 34), (78, 28),
+                (92, 22), (108, 0),
+            ])
+            _rainbow_under_lock(cycles=2, dwell_ms=100)
+            for color in ("green", "blue", "green", "blue"):
+                led(color, True)
+                time.sleep(_cap_sec(0.08))
+                led(color, False)
+                time.sleep(0.05)
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_neutral():
+    """Unclassified: soft beep + gentle rainbow."""
+    with _hw_lock:
+        try:
+            _play([(70, 0)])
+            _rainbow_under_lock(cycles=1, dwell_ms=160)
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_no():
+    """Negative: two red light beeps."""
+    with _hw_lock:
+        try:
+            for pause_s in (0.12, 0.0):
+                led("red", True)
+                try:
+                    _buzzer_set(True)
+                    time.sleep(_cap_sec(0.16))
+                finally:
+                    _buzzer_set(False)
+                led("red", False)
+                if pause_s > 0:
+                    time.sleep(pause_s)
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_sad():
+    """Hurt feelings / sad news: quiet whimpers + blue cry flashes (one lock)."""
+    with _hw_lock:
+        try:
+            # Shorter, softer pulses than mean; blue "tears" between whimpers.
+            steps = [(70, 0.14, 0.22), (60, 0.12, 0.20), (55, 0.12, 0.18), (45, 0.10, 0.0)]
+            for on_ms, blink_s, pause_s in steps:
+                on_ms = _cap_ms(on_ms)
+                blink_s = _cap_sec(blink_s)
+                led("blue", True)
+                try:
+                    _buzzer_set(True)
+                    time.sleep(min(on_ms / 1000.0, blink_s))
+                finally:
+                    _buzzer_set(False)
+                led("blue", False)
+                if pause_s > 0:
+                    time.sleep(pause_s)
+            for _ in range(3):
+                led("blue", True)
+                time.sleep(_cap_sec(0.10))
+                led("blue", False)
+                time.sleep(0.14)
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_mean():
+    """Mean / insult: sad descending beeps + slow red blinks (one lock)."""
+    with _hw_lock:
+        try:
+            steps = [(420, 0.20, 0.14), (320, 0.20, 0.14), (240, 0.24, 0.0)]
+            for on_ms, blink_s, pause_s in steps:
+                on_ms = _cap_ms(on_ms)
+                blink_s = _cap_sec(blink_s)
+                led("red", True)
+                try:
+                    _buzzer_set(True)
+                    time.sleep(min(on_ms / 1000.0, blink_s))
+                finally:
+                    _buzzer_set(False)
+                led("red", False)
+                if pause_s > 0:
+                    time.sleep(pause_s)
+            for _ in range(2):
+                led("red", True)
+                time.sleep(_cap_sec(0.16))
+                led("red", False)
+                time.sleep(0.12)
+        finally:
+            _hw_release_under_lock()
+
+
+def gemy_name_ack():
+    """Short 'Ge-my!' + mini rainbow when someone says the robot's name."""
+    with _hw_lock:
+        try:
+            _play([(55, 32), (55, 32), (120, 0)])
+            _rainbow_under_lock(cycles=1, dwell_ms=100)
+        finally:
+            _hw_release_under_lock()
+
+
 # ---- LEDs -------------------------------------------------------------------
-# Controllable status LEDs on the board.
-_LED_PATH = "/sys/class/leds/{color}:status"
-_COLORS = ("red", "green", "blue")
-
-
 def _write(path, value):
     try:
         with open(path, "w") as f:
@@ -178,6 +540,19 @@ def _write(path, value):
         return False
 
 
+def _led_set_tracked(color, on):
+    """Write one LED and update safety timers."""
+    global _led_on_at
+    base = _LED_PATH.format(color=color)
+    _write(f"{base}/trigger", "none")
+    _write(f"{base}/brightness", 1 if on else 0)
+    with _safety_lock:
+        if on:
+            _led_on_at[color] = time.monotonic()
+        else:
+            _led_on_at.pop(color, None)
+
+
 def led(color, on):
     """Turn an LED on/off. color = red|green|blue|all, on = True/False."""
     color = color.lower()
@@ -186,30 +561,29 @@ def led(color, on):
         if c not in _COLORS:
             print(f"Unknown color '{c}'. Use: red, green, blue, all.")
             continue
-        base = _LED_PATH.format(color=c)
-        _write(f"{base}/trigger", "none")          # detach any blink trigger
-        _write(f"{base}/brightness", 1 if on else 0)  # max_brightness is 1
+        _led_set_tracked(c, bool(on))
 
 
 def led_off_all():
-    led("all", False)
+    force_all_off()
 
 
 def blink(color, times=5, on_ms=250, off_ms=250):
+    on_ms = _cap_ms(on_ms)
     for _ in range(int(times)):
         led(color, True)
         time.sleep(on_ms / 1000.0)
         led(color, False)
         time.sleep(off_ms / 1000.0)
+    led_off_all()
 
 
 def rainbow(cycles=3, dwell_ms=300):
-    for _ in range(int(cycles)):
-        for c in _COLORS:
-            led_off_all()
-            led(c, True)
-            time.sleep(dwell_ms / 1000.0)
-    led_off_all()
+    with _hw_lock:
+        try:
+            _rainbow_under_lock(cycles=cycles, dwell_ms=dwell_ms)
+        finally:
+            _hw_release_under_lock()
 
 
 # ---- Camera -----------------------------------------------------------------
@@ -312,6 +686,12 @@ def main(argv=None):
 
     sub.add_parser("rainbow", help="cycle red/green/blue")
 
+    sub.add_parser("gemy-intro", help="Gemy startup hello (beeps + lights)")
+    sub.add_parser("gemy-name", help="short Ge-my! name ack")
+    sub.add_parser("gemy-yes", help="affirmative yes chirps + green")
+    sub.add_parser("gemy-no", help="negative no tones + red")
+    sub.add_parser("gemy-goodbye", help="Gemy shutdown goodbye")
+
     s = sub.add_parser("photo", help="capture a photo from the camera")
     s.add_argument("path", nargs="?", default="/home/root/hat_photo.jpg")
     s.add_argument("--width", type=int, default=1280)
@@ -349,10 +729,23 @@ def main(argv=None):
         blink(args.color, args.times)
     elif args.cmd == "rainbow":
         rainbow()
+    elif args.cmd == "gemy-intro":
+        gemy_intro()
+    elif args.cmd == "gemy-name":
+        gemy_name_ack()
+    elif args.cmd == "gemy-yes":
+        gemy_yes()
+    elif args.cmd == "gemy-no":
+        gemy_no()
+    elif args.cmd == "gemy-goodbye":
+        gemy_goodbye()
+    elif args.cmd == "force-off":
+        force_all_off()
     elif args.cmd == "photo":
         photo(args.path, args.width, args.height, args.device,
               exposure=args.exposure, gain=args.gain)
 
 
 if __name__ == "__main__":
+    start_safety_watchdog()
     main()

@@ -49,8 +49,7 @@ def stop_greeter():
         stderr=subprocess.DEVNULL,
     )
     time.sleep(0.5)
-    hat.buzzer_off()
-    hat.led_off_all()
+    hat.force_all_off()
 
 
 def start_greeter():
@@ -58,25 +57,13 @@ def start_greeter():
     with open(LOG, "ab", buffering=0) as log:
         log.write(f"\n--- start {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n".encode())
     subprocess.Popen(
-        [PY, "-u", GREETER],
+        [PY, "-u", GREETER, "--cooldown", "3", "--no-vision", "--no-intro", "--no-gemma-mood"],
         stdout=open(LOG, "ab"),
         stderr=subprocess.STDOUT,
         start_new_session=True,
         cwd="/home/root",
     )
-    time.sleep(0.3)
-    try:
-        import greeter
-        greeter.REACTIONS["gemy"]()
-    except Exception:
-        hat.beep(2)
-        hat.led("green", True)
-        time.sleep(0.2)
-        hat.led("green", False)
-    finally:
-        hat.buzzer_off()
-        hat.led_off_all()
-    print("[gemy-watcher] Gemy started.", flush=True)
+    print("[gemy-watcher] Gemy starting (hello intro after models load)...", flush=True)
 
 
 def toggle_gemy():

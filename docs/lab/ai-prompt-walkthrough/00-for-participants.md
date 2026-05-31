@@ -1,50 +1,43 @@
-# Before you start (participants)
+# Before you start
 
-You do **not** need to know how to program. You need:
+You do **not** need to know Python.
 
-1. A **Windows laptop**
-2. **Cursor** (free editor with AI built in) — [cursor.com](https://cursor.com), or any chat AI that can edit files in a folder
-3. This **`gemy-coralboard-lab`** folder on your computer (clone from GitHub or copy from the host)
-4. Optional: a **Coralboard** with **Sensor HAT** plugged in (camera, mic, buzzer, colored lights)
+## You need
+
+1. **Windows laptop**
+2. **Cursor** ([cursor.com](https://cursor.com)) or any AI that edits files in a folder
+3. This repo cloned from GitHub
+4. **Coralboard + Sensor HAT** + USB-C (or pair with someone who has one)
 
 ## What you are building
 
-A small robot personality named **Gemy** on a Synaptics Coralboard:
+**Gemy** — a robot personality: beeps, rainbows, red when insulted, blue when sad.
 
-- Say **“Gemy”** → special hello beep and lights  
-- Say **hello** or **wave** → friendly double beep  
-- Say something **funny** → rainbow + silly beeps  
-- Say something **nice** → happy green/blue lights  
-- Say something **mean** → sad beep + red light  
-- Say anything else → one short beep + blue light  
+Follow the jam: **[../CODE-JAM.md](../CODE-JAM.md)** for rounds and scorecard.  
+Use **[02-prompt-journey.md](02-prompt-journey.md)** for paste-ready AI prompts.
 
-## Words you will hear (simple meanings)
+## Simple words
 
 | Word | Meaning |
 |------|---------|
-| **Board** | The Coralboard computer (Linux inside, no screen required) |
-| **HAT** | The add-on with camera, microphone, buzzer, and LEDs |
-| **ADB** | A cable tool that lets your laptop talk to the board |
-| **Script / file** | Instructions the board or PC runs — the AI will write these for you |
-| **Prompt** | The sentence you paste into the AI to ask for the next step |
-| **Push** | Send a file from your laptop to the board |
+| **Board** | Coralboard — the computer |
+| **HAT** | Camera, mic, buzzer, LEDs stacked on top |
+| **ADB** | USB tool: laptop ↔ board |
+| **Control Center** | Browser dashboard — start Gemy in one click |
+| **Prompt** | Sentence you paste into AI |
 
-## Open the project in Cursor
+## Open in Cursor
 
-1. Install Cursor if you have not already.  
-2. **File → Open Folder** → choose the `gemy-coralboard-lab` folder.  
-3. Open the AI chat (usually on the right).  
-4. Tell the AI: *“Read docs/lab/ai-prompt-walkthrough/02-prompt-journey.md and help me do Step 1.”*
+1. **File → Open Folder** → this repo  
+2. Chat: *"Read docs/lab/CODE-JAM.md and help me with Round 0."*  
+3. Or follow the host through [02-prompt-journey.md](02-prompt-journey.md)
 
-Or follow the host and paste each prompt from [02-prompt-journey.md](02-prompt-journey.md).
+## No board?
 
-## If you do not have a board
+Do Round 0–1 on paper / read prompts. Voice and camera need hardware.
 
-You can still do **early steps** on your laptop (folder structure, reading prompts). Steps that say **Try it on the board** need hardware — pair with someone who has a board or watch the demo screen.
+## Buzzer safety
 
-## Safety / annoyance
+Loud. Use **STOP** in HAT panel or `cleanup-board.ps1` if it will not quit.
 
-- The **buzzer can be loud**. The host will show how to turn it off.  
-- If the buzzer will not stop: ask the AI to run `python3 /home/root/hat.py buzzer off` on the board, or press **STOP** in the HAT test window.
-
-Ready? Go to [02-prompt-journey.md](02-prompt-journey.md) **Step 1**.
+Ready → [02-prompt-journey.md](02-prompt-journey.md) **Step 1**

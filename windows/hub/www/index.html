@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gemy Control Center</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>Gemy</h1>
+        <p class="tagline">Coralboard control center</p>
+      </div>
+      <div class="status-block">
+        <span id="status-pill" class="pill pill-muted">Checking…</span>
+        <p id="status-line" class="status-line">Starting…</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel" aria-labelledby="health-heading">
+      <div class="panel-head">
+        <h2 id="health-heading">System status</h2>
+        <button type="button" id="btn-refresh" class="btn btn-ghost">Refresh</button>
+      </div>
+      <ul id="health-list" class="health-grid"></ul>
+      <p id="greeter-hint" class="hint greeter-hint hidden"></p>
+    </section>
+
+    <section class="panel panel-actions" aria-labelledby="run-heading">
+      <h2 id="run-heading">Run Gemy</h2>
+      <p class="hint">Keywords + yes/no + Gemma assist (safe fallback to neutral). Watch the PowerShell window for <code>[ears] listening</code> (~15s).</p>
+      <div class="action-stack">
+        <button type="button" id="btn-start-voice" class="btn btn-primary btn-lg">
+          Start Gemy — voice <span class="badge">recommended</span>
+        </button>
+        <button type="button" id="btn-start-cam" class="btn btn-secondary">
+          Start Gemy — camera + voice
+        </button>
+      </div>
+    </section>
+
+    <section class="panel panel-split">
+      <div>
+        <h2>Tools</h2>
+        <div class="tool-row">
+          <button type="button" id="btn-hat" class="btn btn-accent">HAT test panel</button>
+          <button type="button" id="btn-cleanup" class="btn btn-danger">Stop buzzer &amp; reset board</button>
+        </div>
+        <button type="button" id="btn-driver" class="btn btn-ghost btn-block driver-btn hidden">
+          Install USB network driver (admin once)
+        </button>
+      </div>
+    </section>
+
+    <section class="panel panel-log" aria-labelledby="activity-heading">
+      <div class="panel-head">
+        <h2 id="activity-heading">Activity</h2>
+        <span id="activity-count" class="meta"></span>
+      </div>
+      <div id="activity-log" class="log" role="log" aria-live="polite"></div>
+    </section>
+
+    <section class="panel panel-log" aria-labelledby="boardlog-heading">
+      <div class="panel-head">
+        <h2 id="boardlog-heading">Board log <span class="meta">/home/root/gemy.log</span></h2>
+        <button type="button" id="btn-tail-log" class="btn btn-ghost">Reload log</button>
+      </div>
+      <pre id="board-log" class="log board-log">Connect the board to see greeter output here.</pre>
+      <details class="proc-details">
+        <summary>Processes on board</summary>
+        <pre id="board-procs" class="log board-log small"></pre>
+      </details>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Boot autostart follows <code>windows/lib/GemyFeatures.ps1</code>. Close this terminal to stop the dashboard server.</p>
+  </footer>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <div id="overlay" class="overlay hidden" aria-hidden="true">
+    <div class="spinner"></div>
+    <p id="overlay-text">Working…</p>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -4,10 +4,11 @@ Use this when packaging the **gemy-coralboard-lab** repo (especially `docs/lab/`
 
 ## Required artifacts
 
-- [ ] `README.md` — overview and learning objectives
-- [ ] `docs/01-STUDENT-LAB.md` — hands-on steps with checkpoints
-- [ ] `docs/02-HOW-WE-CODED-IT.md` — implementation narrative
-- [ ] `docs/03-ARCHITECTURE.md` — diagrams (Mermaid renders on GitHub)
+- [ ] `README.md` — points to Code Jam
+- [ ] `docs/lab/CODE-JAM.md` — **primary student path** (rounds + scorecard)
+- [ ] `docs/lab/01-STUDENT-LAB.md` — technical track
+- [ ] `docs/lab/08-GEMY-MOODS-AND-REACTIONS.md` — current mood/reaction reference
+- [ ] `AGENTS.md` — instructions for AI agents
 - [ ] `docs/04-TROUBLESHOOTING.md`
 - [ ] `docs/05-INSTRUCTOR-GUIDE.md` — filled author/org fields
 - [ ] `docs/lab/ai-prompt-walkthrough/` — non-engineer prompt path
@@ -15,7 +16,7 @@ Use this when packaging the **gemy-coralboard-lab** repo (especially `docs/lab/`
 
 ## Recommended extras
 
-- [ ] Short demo video (MP4) or GIF of all five reactions
+- [ ] Short demo video (MP4) or GIF of reactions (funny rainbow, mean/sad, yes/no)
 - [ ] Photo of hardware setup
 - [ ] Link to Synaptics Coralboard official documentation
 - [ ] One-page PDF export of student lab (optional)

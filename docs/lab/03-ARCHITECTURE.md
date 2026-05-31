@@ -47,7 +47,9 @@ flowchart TB
   subgraph EarsThread["ears thread"]
     VAD[Silero VAD segments]
     STT[Moonshine transcribe]
-    CLS[classify_text keywords]
+    KW[classify_keywords]
+    GEM[try_gemma_mood_assist optional]
+    RES[resolve_reaction_kind]
   end
 
   subgraph IdleThread["idle thread"]
@@ -55,8 +57,8 @@ flowchart TB
   end
 
   subgraph Dispatcher["Greeter.react"]
-    COOL[3s cooldown lock]
-    RX[REACTIONS greet funny nice mean neutral]
+    COOL[cooldown lock]
+    RX[REACTIONS gemy greet funny nice mean sad yes no neutral]
   end
 
   CAM --> VIS
@@ -80,9 +82,11 @@ PDM microphone (HAT)
     → sounddevice InputStream
     → SileroSpeechSegmenter (utterance boundaries)
     → MoonshineTranscriber (text string)
-    → classify_text() → kind: gemy|greet|funny|nice|mean|neutral
+    → classify_utterance (keywords first)
+    → optional gemma_mood worker (if --gemma-mood and unclear)
+    → resolve_reaction_kind → gemy|greet|funny|nice|mean|sad|yes|no|neutral
     → Greeter.react(kind)
-    → hat.beep / hat.led / hat.rainbow / hat.r2d2
+    → hat.gemy_funny / gemy_greet / gemy_mean / … (one GPIO lock each)
 ```
 
 **Note:** Default ALSA device works in testing (`device=None`). Device `0` is the hardware capture device; both showed signal in RMS probes.
@@ -90,6 +94,8 @@ PDM microphone (HAT)
 ---
 
 ## Data flow: vision path
+
+> **Not Gemma 3.** Camera vision is OpenCV only. Gemma 3 is text-in/text-out for `gemma_translate/` demos. See [07-WAVE-VISION-AND-GEMMA.md](07-WAVE-VISION-AND-GEMMA.md).
 
 ```
 /dev/video0 (OV5647)
@@ -102,6 +108,18 @@ PDM microphone (HAT)
 ```
 
 Vision triggers always use reaction **`greet`** (double beep + green).
+
+## Data flow: Gemma 3 translation (separate demo)
+
+```
+HAT mic (or typed text)
+    → Moonshine STT (voice demo only)
+    → gemma_translate/GemmaTranslationService  ← prompts live on board
+    → Gemma 3 270M (NPU)
+    → translated text (no HAT beep/LED reaction)
+```
+
+Launched from Windows via `connect-gemma.ps1` — not used by `wave_detect.py` or `greeter.py` vision.
 
 ---
 

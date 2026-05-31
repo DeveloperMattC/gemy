@@ -1,23 +1,23 @@
-# Coralboard Sensor-HAT test panel: buzzer, LEDs, camera.
-# Buttons run hat.py on the board over adb and show the captured photo.
+# Coralboard Sensor-HAT test panel: buzzer, LEDs, Gemy sequences, camera.
+# Run from hub button 2 or:  powershell -STA -ExecutionPolicy Bypass -File hat-gui.ps1
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# Make sure adb is on PATH (machine + user)
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
-            [System.Environment]::GetEnvironmentVariable("Path","User")
+. (Join-Path $PSScriptRoot "..\lib\Repo.ps1")
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+            [System.Environment]::GetEnvironmentVariable("Path", "User")
 
 $adb       = "adb"
 $hatPy     = "/home/root/hat.py"
-$venvPy    = "/home/root/sl2610-examples/.venv/bin/python3"   # has OpenCV (camera)
+$hatLocal  = Join-RobotPath "board", "python", "hat.py"
+$venvPy    = "/home/root/sl2610-examples/.venv/bin/python3"
 $remotePic = "/home/root/hat_photo.jpg"
 $localPic  = Join-Path $env:TEMP "hat_photo.jpg"
 
-# ---- Form ------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Coralboard Sensor-HAT Control"
-$form.Size = New-Object System.Drawing.Size(720, 700)
+$form.Text = "Coralboard Sensor-HAT - test panel"
+$form.Size = New-Object System.Drawing.Size(720, 780)
 $form.StartPosition = "CenterScreen"
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
@@ -28,7 +28,6 @@ $status.TextAlign = "MiddleCenter"
 $status.Text = "Checking board..."
 $form.Controls.Add($status)
 
-# ---- Log (bottom) ----------------------------------------------------------
 $log = New-Object System.Windows.Forms.TextBox
 $log.Multiline = $true
 $log.ReadOnly = $true
@@ -44,13 +43,12 @@ function Write-Log($msg) {
     $log.ScrollToCaret()
 }
 
-# Run a hat.py command on the board; returns stdout/stderr text.
-function Invoke-Hat($pythonCmd, $label) {
+function Invoke-AdbShell([string]$cmd, [string]$label) {
     Write-Log "$label ..."
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     $form.Refresh()
     try {
-        $out = & $adb shell "$pythonCmd" 2>&1
+        $out = & $adb shell $cmd 2>&1
         if ($out) { Write-Log ($out -join "  ") }
     } catch {
         Write-Log "ERROR: $_"
@@ -59,14 +57,29 @@ function Invoke-Hat($pythonCmd, $label) {
     }
 }
 
-function Hat($hatArgs, $label) { Invoke-Hat "python3 $hatPy $hatArgs" $label }
+function Hat([string]$hatArgs, [string]$label) {
+    Invoke-AdbShell "python3 $hatPy $hatArgs" $label
+}
 
-# ---- Buzzer group ----------------------------------------------------------
-$gbBuzz = New-Object System.Windows.Forms.GroupBox
-$gbBuzz.Text = "Buzzer  (active buzzer = one pitch; patterns vary the rhythm)"
-$gbBuzz.Location = New-Object System.Drawing.Point(12, 32)
-$gbBuzz.Size = New-Object System.Drawing.Size(680, 120)
-$form.Controls.Add($gbBuzz)
+function Force-BuzzerOff {
+    Write-Log "Buzzer OFF (GPIO + hat force_all_off) ..."
+    Invoke-AdbShell "gpioset gpiochip0 6=1 2>/dev/null; gpioset gpiochip0 6=1 2>/dev/null; python3 $hatPy force-off 2>/dev/null; true" "Emergency stop"
+    foreach ($k in @("red", "green", "blue")) {
+        $ledState[$k] = $false
+        Update-LedButton $k
+    }
+}
+
+function Push-HatPy {
+    if (-not (Test-Path -LiteralPath $hatLocal)) {
+        Write-Log "Missing local hat.py: $hatLocal"
+        return
+    }
+    Write-Log "Pushing hat.py ..."
+    $out = & $adb push $hatLocal "/home/root/hat.py" 2>&1
+    if ($LASTEXITCODE -eq 0) { Write-Log "hat.py pushed." }
+    else { Write-Log ("push failed: " + ($out -join " ")) }
+}
 
 function New-Button($text, $x, $y, $w, $h, $onClick) {
     $b = New-Object System.Windows.Forms.Button
@@ -76,6 +89,13 @@ function New-Button($text, $x, $y, $w, $h, $onClick) {
     $b.Add_Click($onClick)
     return $b
 }
+
+# ---- Buzzer ----------------------------------------------------------------
+$gbBuzz = New-Object System.Windows.Forms.GroupBox
+$gbBuzz.Text = "Buzzer  (active buzzer = one pitch; patterns vary rhythm)"
+$gbBuzz.Location = New-Object System.Drawing.Point(12, 32)
+$gbBuzz.Size = New-Object System.Drawing.Size(680, 120)
+$form.Controls.Add($gbBuzz)
 
 $gbBuzz.Controls.Add((New-Button "Beep" 15 25 90 34 { Hat "beep" "Beep" }))
 $gbBuzz.Controls.Add((New-Button "Beep x3" 115 25 90 34 { Hat "beep 3" "Beep x3" }))
@@ -93,27 +113,25 @@ $lblMs.AutoSize = $true
 $gbBuzz.Controls.Add($lblMs)
 
 $gbBuzz.Controls.Add((New-Button "Siren" 420 25 90 34 { Hat "siren" "Siren" }))
-$btnStop = New-Button "STOP" 530 25 130 34 { Hat "buzzer off" "Buzzer OFF" }
+$btnStop = New-Button "STOP" 530 25 130 34 { Force-BuzzerOff }
 $btnStop.BackColor = [System.Drawing.Color]::FromArgb(220, 70, 70)
 $btnStop.ForeColor = [System.Drawing.Color]::White
 $btnStop.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 $gbBuzz.Controls.Add($btnStop)
 
-# Second row: fun robotic patterns
 $gbBuzz.Controls.Add((New-Button "R2D2" 15 64 120 34 { Hat "r2d2" "R2D2" }))
 $gbBuzz.Controls.Add((New-Button "Warble" 145 64 120 34 { Hat "warble" "Warble" }))
 $gbBuzz.Controls.Add((New-Button "Chirp" 275 64 120 34 { Hat "chirp" "Chirp" }))
 $gbBuzz.Controls.Add((New-Button "Alarm" 405 64 120 34 { Hat "alarm" "Alarm" }))
 $gbBuzz.Controls.Add((New-Button "SOS" 535 64 125 34 { Hat "sos" "SOS" }))
 
-# ---- LED group -------------------------------------------------------------
+# ---- LEDs ------------------------------------------------------------------
 $gbLed = New-Object System.Windows.Forms.GroupBox
 $gbLed.Text = "LEDs"
 $gbLed.Location = New-Object System.Drawing.Point(12, 162)
 $gbLed.Size = New-Object System.Drawing.Size(680, 130)
 $form.Controls.Add($gbLed)
 
-# Track on/off per color so one button toggles.
 $ledState = @{ red = $false; green = $false; blue = $false }
 $ledButtons = @{}
 $ledColors = @{
@@ -136,18 +154,17 @@ function Update-LedButton($color) {
 }
 
 $lx = 15
-foreach ($c in @("red","green","blue")) {
+foreach ($c in @("red", "green", "blue")) {
     $color = $c
-    $btn = New-Button ("{0}: off" -f $color.ToUpper()) $lx 25 120 38 {}.GetNewClosure()
-    # rebuild click with captured color
-    $btn.Add_Click([System.EventHandler]({
-        param($s,$e)
+    $btn = New-Button ("{0}: off" -f $color.ToUpper()) $lx 25 120 38 {}
+    $btn.Add_Click({
+        param($s, $e)
         $col = $s.Tag
         $ledState[$col] = -not $ledState[$col]
         $stateWord = if ($ledState[$col]) { "on" } else { "off" }
         Hat ("led {0} {1}" -f $col, $stateWord) ("LED {0} {1}" -f $col, $stateWord)
         Update-LedButton $col
-    }))
+    })
     $btn.Tag = $color
     $ledButtons[$color] = $btn
     $gbLed.Controls.Add($btn)
@@ -155,27 +172,40 @@ foreach ($c in @("red","green","blue")) {
 }
 
 $gbLed.Controls.Add((New-Button "All ON" 405 25 120 38 {
-    foreach ($k in @("red","green","blue")) { $ledState[$k] = $true; Update-LedButton $k }
+    foreach ($k in @("red", "green", "blue")) { $ledState[$k] = $true; Update-LedButton $k }
     Hat "led all on" "LED all on"
 }))
 $gbLed.Controls.Add((New-Button "All OFF" 535 25 120 38 {
-    foreach ($k in @("red","green","blue")) { $ledState[$k] = $false; Update-LedButton $k }
+    foreach ($k in @("red", "green", "blue")) { $ledState[$k] = $false; Update-LedButton $k }
     Hat "led all off" "LED all off"
 }))
-
 $gbLed.Controls.Add((New-Button "Blink Blue x5" 15 73 160 38 {
     Hat "blink blue 5" "Blink blue x5"
     $ledState["blue"] = $false; Update-LedButton "blue"
 }))
 $gbLed.Controls.Add((New-Button "Rainbow" 185 73 160 38 {
     Hat "rainbow" "Rainbow"
-    foreach ($k in @("red","green","blue")) { $ledState[$k] = $false; Update-LedButton $k }
+    foreach ($k in @("red", "green", "blue")) { $ledState[$k] = $false; Update-LedButton $k }
 }))
 
-# ---- Camera group ----------------------------------------------------------
+# ---- Gemy sequences (same as greeter reactions) ----------------------------
+$gbGemy = New-Object System.Windows.Forms.GroupBox
+$gbGemy.Text = "Gemy sequences  (run cleanup before Gemy demo if camera is busy)"
+$gbGemy.Location = New-Object System.Drawing.Point(12, 300)
+$gbGemy.Size = New-Object System.Drawing.Size(680, 130)
+$form.Controls.Add($gbGemy)
+
+$gbGemy.Controls.Add((New-Button "Hello intro" 15 28 180 38 { Hat "gemy-intro" "Gemy hello intro" }))
+$gbGemy.Controls.Add((New-Button "Ge-my!" 205 28 120 38 { Hat "gemy-name" "Gemy name ack" }))
+$gbGemy.Controls.Add((New-Button "Goodbye" 335 28 120 38 { Hat "gemy-goodbye" "Gemy goodbye" }))
+$gbGemy.Controls.Add((New-Button "Yes" 15 78 100 38 { Hat "gemy-yes" "Yes (rising chirps + green)" }))
+$gbGemy.Controls.Add((New-Button "No" 125 78 100 38 { Hat "gemy-no" "No (descending + red)" }))
+$gbGemy.Controls.Add((New-Button "Push hat.py" 465 28 100 38 { Push-HatPy }))
+
+# ---- Camera ----------------------------------------------------------------
 $gbCam = New-Object System.Windows.Forms.GroupBox
 $gbCam.Text = "Camera"
-$gbCam.Location = New-Object System.Drawing.Point(12, 300)
+$gbCam.Location = New-Object System.Drawing.Point(12, 438)
 $gbCam.Size = New-Object System.Drawing.Size(680, 150)
 $form.Controls.Add($gbCam)
 
@@ -201,8 +231,7 @@ $gbCam.Controls.Add($gain)
 
 function Take-Photo {
     $g = [int]$gain.Value
-    Invoke-Hat ("{0} {1} photo {2} --gain {3}" -f $venvPy, $hatPy, $remotePic, $g) ("Photo (gain {0})" -f $g)
-    # release any previous image so we can overwrite the temp file
+    Invoke-AdbShell ("{0} {1} photo {2} --gain {3}" -f $venvPy, $hatPy, $remotePic, $g) ("Photo (gain {0})" -f $g)
     if ($pic.Image) { $old = $pic.Image; $pic.Image = $null; $old.Dispose() }
     if (Test-Path $localPic) { Remove-Item $localPic -Force -ErrorAction SilentlyContinue }
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
@@ -227,16 +256,18 @@ $gbCam.Controls.Add((New-Button "Open in viewer" 395 82 150 42 {
     else { Write-Log "Take a photo first." }
 }))
 
-# ---- Device check on startup -----------------------------------------------
+# ---- Startup ---------------------------------------------------------------
 try {
     $devs = & $adb devices 2>&1 | Select-Object -Skip 1 | Where-Object { $_ -match "\tdevice" }
     if ($devs) {
         $status.Text = "Board connected: " + ($devs -join ", ")
         $status.BackColor = [System.Drawing.Color]::FromArgb(225, 245, 225)
-        Write-Log "Ready."
+        Write-Log "Ready. Pushing latest hat.py ..."
+        Push-HatPy
     } else {
-        $status.Text = "WARNING: no board detected - plug in USB-C and reopen."
+        $status.Text = "WARNING: no board - plug in USB-C; buttons will fail until connected."
         $status.BackColor = [System.Drawing.Color]::FromArgb(250, 230, 210)
+        Write-Log "No board on ADB."
     }
 } catch {
     $status.Text = "ERROR running adb: $_"

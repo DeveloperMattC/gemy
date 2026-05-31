@@ -45,10 +45,10 @@ Create windows/demos/hat-gui.ps1: a WinForms GUI that runs hat.py on the board v
 
 ---
 
-**4A — Wave**
+**4A — Wave** (OpenCV only — **not** Gemma 3)
 
 ```
-Create board/python/wave_detect.py: OpenCV on /dev/video0, motion detection, count horizontal reversals to detect a waving hand, then call hat.beep(2). Use hat.py from same folder. Include --sensitivity low|medium|high. Cap processing so it doesn't hog CPU. Always release camera and buzzer off on exit.
+Create board/python/wave_detect.py: OpenCV on /dev/video0, motion detection, count horizontal reversals to detect a waving hand, then call hat.beep(2). Use hat.py from same folder. Include --sensitivity low|medium|high. Cap processing so it doesn't hog CPU. Always release camera and buzzer off on exit. Do NOT use Gemma 3 or any LLM — pure motion math.
 ```
 
 ---
@@ -59,7 +59,7 @@ Create board/python/wave_detect.py: OpenCV on /dev/video0, motion detection, cou
 Create board/python/greeter.py named Gemy:
 - Import hat.py and sl2610-examples utils.speech (Moonshine + Silero VAD)
 - Listen for speech; classify into: gemy (name), greet (hello/hi), funny (haha/lol), nice (thanks/good/love), mean (stupid/hate), neutral (anything else)
-- Reactions: gemy = signature 3-note beep + green-blue-green LEDs; greet = double beep + green; funny = r2d2 + rainbow; nice = happy beeps + green/blue alternate; mean = sad beeps + red; neutral = one beep + blue
+- Reactions (hat.gemy_*): gemy = name beep + mini rainbow; greet = rainbow + beep; funny = r2d2 + double rainbow; nice = happy beeps + rainbow; mean = red blinks; sad = blue cries; yes/no = chirps or red; neutral = soft beep + rainbow. Keywords first, optional Gemma assist, invalid mood → neutral. See docs/lab/08-GEMY-MOODS-AND-REACTIONS.md
 - Vision thread: same wave + hand-held-up detection as before
 - Load speech model BEFORE camera loop; cap vision --fps 5; kill stale wave_detect on startup
 - 1 second cooldown between reactions; idle watchdog turns all off after 20s quiet

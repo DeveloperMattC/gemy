@@ -28,6 +28,14 @@ The HAT buzzer is stuck on loud. Give adb commands using hat.py buzzer off and g
 
 ---
 
+## “Does Gemma watch the camera for waves?”
+
+```
+Explain in plain English: wave_detect.py and greeter.py vision use OpenCV motion only — no Gemma 3, no training. Gemma 3 on Coralboard is text-only in sl2610-examples/gemma_translate for translation. Point me to docs/lab/07-WAVE-VISION-AND-GEMMA.md in this repo.
+```
+
+---
+
 ## Voice does not work but waving works
 
 ```

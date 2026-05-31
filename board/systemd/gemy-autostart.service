@@ -1,17 +1,14 @@
 [Unit]
-Description=Gemy greeting robot (greeter.py on boot)
+Description=Gemy greeting robot (auto-start on power-on)
 After=multi-user.target sound.target
 Wants=gemy-watcher.service
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sh -c 'pkill -9 -f wave_detect.py 2>/dev/null; pkill -9 -f greeter.py 2>/dev/null; true'
-ExecStart=/home/root/sl2610-examples/.venv/bin/python3 -u /home/root/greeter.py
-Restart=on-failure
-RestartSec=10
+ExecStart=/home/root/gemy-boot.sh
+# Do not restart on crash (avoids buzzer/log storm while tuning).
+Restart=no
 WorkingDirectory=/home/root
-StandardOutput=append:/home/root/gemy.log
-StandardError=append:/home/root/gemy.log
 
 [Install]
 WantedBy=multi-user.target

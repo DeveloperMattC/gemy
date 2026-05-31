@@ -100,18 +100,25 @@ All outputs go through `Greeter.react(kind, why)`:
 - Calls `REACTIONS[kind]()`.
 - Always ends with `hat.buzzer_off()` and `hat.led_off_all()`.
 
-**Concurrent light + sound:** `_concurrent()` runs LED and buzzer functions in parallel threads so the robot feels responsive.
+**Sound + light:** Each mood calls a **`hat.gemy_*()`** helper that holds one **`_hw_lock`** and runs buzzer + LEDs **in sequence**. Do not run `r2d2` and `rainbow` in parallel threads — the lock hid the rainbow.
 
-| `kind` | Buzzer | LEDs |
-|--------|--------|------|
-| `gemy` | three-note *Ge-my!* pattern `(55,35)×2 + (220,0)` | green → blue → green wave |
-| `greet` | `beep(2)` | green flash |
-| `funny` | `r2d2(22)` | `rainbow(2)` |
-| `nice` | rising triple beep pattern | green ↔ blue × 3 |
-| `mean` | slow descending pattern | red 1.6 s |
-| `neutral` | `beep(1)` | blue 0.35 s |
+| `kind` | Helper | LEDs (summary) |
+|--------|--------|----------------|
+| `gemy` | `gemy_name_ack()` | Mini rainbow after name beep |
+| `greet` | `gemy_greet()` | Rainbow + double beep |
+| `funny` | `gemy_funny()` | Color blips + R2D2 + **2× rainbow** |
+| `nice` | `gemy_nice()` | Rising beeps + rainbow + green/blue |
+| `mean` | `gemy_mean()` | Red blinks + descending beeps |
+| `sad` | `gemy_sad()` | Blue cry flashes + quiet whimpers |
+| `yes` | `gemy_yes()` | Chirps + rainbow + green |
+| `no` | `gemy_no()` | Red blinks + descending tones |
+| `neutral` | `gemy_neutral()` | Soft beep + gentle rainbow |
+
+See [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md).
 
 ### 3.3 Vision — wave detection
+
+> **Gemma 3 does not power the wave demo.** Vision is OpenCV motion math in `wave_detect.py` / `greeter.py` `vision_loop()`. Gemma 3 on this board is text-only and lives in `sl2610-examples/gemma_translate/` for translation demos. Full map: [07-WAVE-VISION-AND-GEMMA.md](07-WAVE-VISION-AND-GEMMA.md).
 
 No ML/NPU. Algorithm per frame (on downscaled 320×240 gray):
 
@@ -138,20 +145,23 @@ from utils.speech import (
 
 `SpeechRecognizer.listen_once()` blocks until VAD finds an utterance and Moonshine returns non-empty text.
 
-### 3.6 Sentiment — keyword classifier (not LLM)
+### 3.6 Sentiment — keywords first, Gemma assist second
 
-We intentionally use **small word sets** for lab predictability and zero NPU cost:
+After Moonshine transcribes speech:
 
-```python
-GEMY_NAMES = {"gemy", "gemi", "jemmy", "jimmy"}  # name + common mis-hearings
-FUNNY = {"haha", "lol", "funny", ...}
-NICE  = {"good", "love", "thanks", ...}
-MEAN  = {"stupid", "hate", ...}
-```
+1. **`classify_utterance()`** — off, yes, no, joke tracker, name, then **`classify_keywords()`** (mean, sad, funny, nice, greet).
+2. If still `None` and **`--gemma-mood`**: **`try_gemma_mood_assist()`** (subprocess worker, lazy NPU load).
+3. **`resolve_reaction_kind()`** — unknown label → **neutral** (never crash `react()`).
 
-`classify_text()` order: **gemy (name)** → funny → mean → nice → greeting keywords → `None` (→ neutral in speech loop).
+Valid moods: `gemy`, `greet`, `funny`, `nice`, `mean`, `sad`, `yes`, `no`, `neutral`, `off`.
 
-In `speech_loop`, `None` becomes **`neutral`** so every utterance gets feedback.
+**`gemma_mood.mood_for_reaction()`** maps Gemma output + aliases; garbage → `None` → neutral.
+
+**Stability:** `--gemma-mood-serial` is disabled. Worker prints `READY` without loading the model; first unclear phrase loads Gemma (up to 90 s timeout). Boot uses `--no-gemma-mood`.
+
+Joke detection: **`KnockKnockTracker`** + riddle phrases ("why did the chicken…") + keyword `FUNNY` set.
+
+Full flow: [08-GEMY-MOODS-AND-REACTIONS.md](08-GEMY-MOODS-AND-REACTIONS.md).
 
 Moonshine transcripts are imperfect; keywords are forgiving (e.g. `"ha ha"` substring, `haha` prefix).
 

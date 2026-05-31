@@ -17,7 +17,7 @@ Use this when **you** lead the session. Participants follow [02-prompt-journey.m
 | 0–5 | 1 | “AI writes code; you run it and test on hardware.” |
 | 5–20 | 2 | “Body first: beep and lights.” |
 | 20–30 | 3 | “GUI so anyone can test.” |
-| 30–45 | 4 | “Camera sees a wave.” |
+| 30–45 | 4 | “Camera **math** sees a wave — **not** Gemma.” ([07-WAVE-VISION-AND-GEMMA.md](../07-WAVE-VISION-AND-GEMMA.md)) |
 | 45–65 | 5 | “Ears + personality — this is Gemy.” |
 | 65–75 | 6–7 | “One app on Windows; cleanup button.” |
 | 75–85 | 8 | Optional: USER button standalone |

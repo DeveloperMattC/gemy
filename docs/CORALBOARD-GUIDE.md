@@ -22,22 +22,32 @@ You normally only need the **"Every time"** steps below.
 
 ---
 
-## Easiest way: the desktop "Control Center"
+## Easiest way: Gemy Control Center
 
-Double-click **"Coralboard Control Center"** on your Windows desktop. It opens one
-window with a button for every demo (and shows whether the board is connected):
+Double-click **"Gemy Control Center"** on your Windows desktop (`windows\hub\make-shortcut.ps1` to create it).
 
-1. Connect / fix internet sharing  2. Sensor HAT control panel
-3. Gemy (greeting robot)  4. Live video in browser (WebRTC)  5. Upload images
-6. Image classification  7. Gemma 3 voice translation  8. Open a shell
+A small PowerShell window starts a **local web dashboard** and opens it in your browser (`http://127.0.0.1:8765/`). Leave that window open while you use the dashboard; close it to stop the server.
 
-Plug in the board, hit **Refresh connection**, then click a demo. (The hub is
-`coralboard-hub.ps1`; recreate the shortcut by running `make-shortcut.ps1`.)
+On load it **checks everything automatically**:
 
-**Before Gemy (#3):** click **"0. Clean up board"** (or run
-`cleanup-board.ps1`) to stop leftover `wave_detect.py` / old greeter processes
-and free the camera. `wave_detect.py` has **no microphone** — if it is still
-running, voice will not work.
+- **System status** — ADB, USB driver, board connection, scripts, speech stack, boot autostart  
+- **Sync** — latest Gemy scripts pushed when the board is connected  
+- **Board log** — tail of `/home/root/gemy.log` for greeter output  
+- **Toasts** — each action reports success or failure in the page  
+
+Actions:
+
+- **Start Gemy — voice only** (recommended)  
+- **Start Gemy — with camera**  
+- **HAT test panel** — buzzer, LEDs, camera  
+- **Stop buzzer and reset board**  
+
+Other Synaptics demos live in `/home/root/sl2610-examples` on the board if installed.
+
+**Gemy is one click:** it pushes `greeter.py`, `hat.py`, and `gemma_mood.py`,
+runs cleanup (stops old `wave_detect` / greeter, frees the camera), then starts
+Gemy in a terminal. Wait until you see **`[ears] listening`** (~30–60 s first time).
+Use **0. Clean up board** only if something is stuck after you stop Gemy.
 
 ---
 
@@ -155,8 +165,23 @@ cat /home/root/sl2610-examples/<DemoFolder>/README.md
 
 ## Gemma 3 LLM translation demo (already set up)
 
+> **Not used for wave detection.** Waving at Gemy uses OpenCV motion math in `greeter.py` only.
+> Gemma 3 here is **text-only** (translation). Where each “brain” lives:
+> [docs/lab/07-WAVE-VISION-AND-GEMMA.md](lab/07-WAVE-VISION-AND-GEMMA.md).
+
 This translates English → Spanish/French/Italian using **Gemma 3 270M** on the NPU.
 The models and PortAudio are already installed. Two ways to run it:
+
+### Where translation “behavior” is defined
+
+Prompt templates and `GemmaTranslationService` live on the board (not in this repo):
+
+```
+/home/root/sl2610-examples/gemma_translate/translation.py   # builds instruct prompts
+/home/root/sl2610-examples/gemma_translate/common_args.py   # language menu
+```
+
+Our helper [`board/python/gemma_text.py`](../board/python/gemma_text.py) calls that service for one-shot text tests.
 
 ### A) Text only (no microphone) — quick test
 
@@ -428,14 +453,22 @@ then reacts with light + sound depending on what it sees and the *tone* of what 
 - **Wave** — a hand moving left<->right (OpenCV motion, no ML/NPU) -> double beep + green flash.
 - **Hand held up** — a still hand/object in the upper frame for ~0.7 s -> double beep + green flash.
 - **"hello" / "hi"** (also "hey"/"hiya") -> double beep + green flash.
-- **Something funny** (laughing — "haha", "lol", "that's funny") -> rainbow lights + R2D2 giggle.
-- **Being nice** ("good robot", "I love you", "thanks", "cute"...) -> happy rising beeps + green/blue back-and-forth.
-- **Being mean** ("stupid", "I hate you", "shut up"...) -> slow sad "aww" beeps + red glow.
-- **Anything else it hears** (neutral / not sure how to respond) -> one short beep + a blue blip.
+- **Something funny** (jokes, "haha", knock-knock, chicken joke) -> R2D2 chatter + **rainbow** sweeps.
+- **Being nice** ("thanks", "love you", "awesome") -> happy beeps + **rainbow** + green/blue sparkle.
+- **Being mean** ("stupid", "hate you", "shut up") -> louder sad beeps + **red** blinks.
+- **Being sad** ("nobody likes you", "sad news", "lonely") -> quiet whimpers + **blue** cry flashes.
+- **"yes"** ("yeah", "for sure", "I agree") -> **one green** light beep.
+- **"no"** ("nope", "no way") -> **two red** light beeps.
+- **Anything else** -> soft beep + gentle **rainbow** (neutral).
 - **Idle** — after ~20 s with no reaction it force-clears everything (LEDs off, buzzer off).
+- **"Gemy turn off"** (or **stop**, **go to sleep**, **goodbye Gemy**) → goodbye beeps + blue fade, then Gemy exits.
 
-Speech is transcribed by the on-board Moonshine model (same one the Gemma voice demo
-uses); the tone is matched against small word lists. All reactions share a 3 s cooldown.
+Speech is transcribed by **Moonshine**. **Moods** use **keyword rules first** (`greeter.py`), then optional **Gemma 3 assist** (`--gemma-mood`, default from PC) only when keywords miss. Invalid Gemma output → **neutral** (no crash). Use `--no-gemma-mood` for keywords-only (safest). See [docs/lab/08-GEMY-MOODS-AND-REACTIONS.md](lab/08-GEMY-MOODS-AND-REACTIONS.md).
+
+```powershell
+greet-demo.ps1                  # Gemma assist on (default)
+greet-demo.ps1 -NoGemmaMood     # keywords only
+```
 
 ```powershell
 # Windows — open it in an interactive window (Ctrl+C to stop):
@@ -445,32 +478,22 @@ powershell -ExecutionPolicy Bypass -File greet-demo.ps1 -NoSpeech   # camera onl
 powershell -ExecutionPolicy Bypass -File greet-demo.ps1 -NoVision   # mic only
 ```
 
-#### Run Gemy without a PC (USER button)
+#### Run Gemy without a PC (power bank / charger — autostart on boot)
 
-The Coralboard has a physical **USER button** (labeled **Enter Button** in Linux,
-near the reset control). We did **not** use it in early demos; Gemy was started
-only from Windows via `adb`.
-
-You can install **standalone mode** once (while USB is connected):
+**One-time install** while USB is connected to your PC:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install-gemy-standalone.ps1
 ```
 
-After that:
+**Boot autostart is OFF by default** in this repo (`windows/lib/GemyFeatures.ps1`). When enabled via `install-gemy-standalone.ps1`, boot runs **voice-only, keywords-only** (`--no-gemma-mood --no-vision`) for stability. Use the Control Center on a PC for camera + Gemma assist + full intro.
 
-- Power the board from a **USB charger** or cable (PC data link not required).
-- **Internet is not required** at runtime if Moonshine/speech models are already on the board.
-- **Short-press the USER button** → start or stop Gemy (you hear the signature *Ge-my!* beep when it starts).
+- **Internet is not required** at runtime if speech models are already on the board.
+- **USER button** still **starts/stops** Gemy if you want silence.
 - Log on the board: `/home/root/gemy.log`
+- Disable boot autostart: `install-gemy-standalone.ps1 -NoAutostartOnBoot`
 
-Optional — start Gemy automatically every boot:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File install-gemy-standalone.ps1 -AutostartOnBoot
-```
-
-Check the watcher service: `adb shell systemctl status gemy-watcher`
+Check services: `adb shell systemctl status gemy-autostart gemy-watcher`
 
 Or directly on the board (needs the venv python for OpenCV + sounddevice):
 
