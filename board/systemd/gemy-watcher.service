@@ -1,0 +1,13 @@
+[Unit]
+Description=Gemy USER-button watcher (start/stop greeter.py)
+After=multi-user.target sound.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/root/gemy-watcher.py
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=/home/root
+
+[Install]
+WantedBy=multi-user.target

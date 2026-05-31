@@ -1,0 +1,25 @@
+# Local / machine-specific (never commit)
+logs/*.log
+*.log
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+desktop.ini
+.cursor/
+
+# Build / temp on board pulls
+output_classification.jpg
+hat_photo.jpg
+*.jpg
+!docs/**/*.jpg
+
+# Driver catalog generated on your PC (recreated by install-ncm-signed.ps1)
+drivers/ncm/coral-ncm-drv/*.cat
