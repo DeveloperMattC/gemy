@@ -216,6 +216,22 @@
     if (!confirm("Stop greeter, demos, and turn the buzzer off?")) return;
     postAction("/api/cleanup", null, "Cleaning up board…", "Board reset");
   });
+  $("btn-update-board").addEventListener("click", () => {
+    if (
+      !confirm(
+        "Update the Coralboard from this repo?\n\n" +
+          "This overwrites greeter.py and related scripts on the board with the copies in this Mac’s gemy folder.\n\n" +
+          "Skip this if your board already has a newer / custom Gemy."
+      )
+    )
+      return;
+    postAction(
+      "/api/update-board",
+      null,
+      "Pushing scripts to board…",
+      "Board updated from this repo"
+    );
+  });
   $("btn-driver").addEventListener("click", () => {
     if (
       !confirm(

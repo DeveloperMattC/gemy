@@ -1,79 +1,113 @@
-# Gemy on macOS — control & monitor (no overwrite)
+# Gemy on a Mac
 
-The **board** runs Linux Python (`/home/root/greeter.py`). This folder is the **Mac host** side: Control Center UI + shell helpers over USB ADB.
+Use this folder to open **Gemy Control Center** on macOS and talk to a Coralboard over USB.
 
-**Windows lab path stays in `windows/`.** Use that on a Windows PC for Code Jam / full deploy.
+The Code Jam lab on **Windows** is still under [`windows/`](../windows/). This Mac path is for controlling and monitoring the board from a Mac.
 
-## Critical: board code protection
+---
 
-Your Coralboard may have a newer Gemy than this repo. Mac helpers **do not `adb push` by default**.
+## Which kind of board do you have?
 
-| Action | Pushes repo → board? |
-|--------|----------------------|
-| `./mac/start-hub.sh` | No |
-| Refresh in Control Center | No |
-| Start Gemy buttons | No (runs board’s existing greeter) |
-| `./mac/start-gemy.sh` | No |
-| `./mac/cleanup-board.sh` / `recover-board.sh` | No |
-| `./mac/start-gemy.sh --allow-push` or hub `--allow-push` | **Yes — overwrites** |
+Pick **one** path. You almost never need both.
+
+### A) Brand-new board (no Gemy yet, or you want *this* lab’s Gemy)
+
+Your board is empty of Gemy, or you’re happy to install the scripts from this repo.
+
+1. Install ADB once (see [Setup](#setup-once) below).
+2. Plug in USB-C. Wait ~20 seconds.
+3. Open Control Center: `./mac/start-hub.sh`  
+   (or double-click the Desktop shortcut from `./mac/make-shortcut.sh`)
+4. Click **Update board from this repo** and confirm.  
+   That copies this Mac’s Gemy scripts onto the board.
+5. Click **Start Gemy — voice**. Wait for `[ears] listening` in the Terminal window.
+6. Say **“Gemy”**.
+
+**Note:** The board still needs the usual Coral speech stack (`sl2610-examples` venv). “Update board” installs *Gemy’s* Python files; it does not flash a blank factory board from zero. If **Speech stack** stays red in the UI, follow the Coralboard / lab setup docs first.
+
+### B) Advanced board (Gemy already newer / customized)
+
+Your Coralboard already runs a better or custom Gemy than this repo. **Do not overwrite it.**
+
+1. Install ADB once (see [Setup](#setup-once) below).
+2. Plug in USB-C. Wait ~20 seconds.
+3. Open Control Center: `./mac/start-hub.sh`
+4. **Skip** **Update board from this repo**.
+5. Use **Refresh**, **board log**, and **Start Gemy** to monitor and run what’s *already* on the board.
+
+Refresh and Start never copy files by themselves. Only the **Update board** button (after you confirm) overwrites the board.
+
+---
 
 ## Setup (once)
 
 ```bash
 brew install android-platform-tools
-adb devices   # should show grinn-astra-… device after USB-C plug-in
+adb devices
 ```
 
-## Control Center (browser UI)
+After you plug in USB-C you should see a line ending in `device` (often `grinn-astra-…`).
 
-```bash
-./mac/start-hub.sh
-```
-
-Opens `http://127.0.0.1:8765/` — status, start/stop, board log, processes. Keep that terminal open.
-
-### Desktop shortcut
+Optional Desktop icon:
 
 ```bash
 ./mac/make-shortcut.sh
 ```
 
-Puts **Gemy Control Center.app** (and a `.command` fallback) on your Desktop. Double-click to open the hub + browser. If macOS blocks it the first time: right-click → **Open** → **Open**.
+Double-click **Gemy Control Center**. If macOS blocks it: right-click → **Open** → **Open**. Keep the Terminal window open while you use the browser UI.
 
-## CLI options
+---
+
+## Everyday controls
+
+| Want to… | Do this |
+|----------|---------|
+| Open the UI | `./mac/start-hub.sh` or Desktop shortcut |
+| Install / refresh lab Gemy onto the board | **Update board from this repo** (confirm) |
+| Run Gemy without changing board files | **Start Gemy — voice** |
+| See what the board is doing | **Board log** / **Reload log** |
+| Stop beeps / reset | **Stop buzzer & reset board** |
+| Recover after a freeze | `./mac/recover-board.sh` |
+
+CLI alternatives (same rules — no push unless you ask):
 
 ```bash
-./mac/start-gemy.sh                 # voice+camera, board moods, no push
-./mac/start-gemy.sh --no-vision     # voice only
-./mac/start-gemy.sh --no-gemma-mood # force keyword-only flags
-./mac/cleanup-board.sh              # stop demos, buzzer/LEDs off
-./mac/recover-board.sh              # after a hang (no push)
+./mac/start-gemy.sh --no-vision     # start board’s existing greeter
+./mac/cleanup-board.sh
+./mac/recover-board.sh
+./mac/start-gemy.sh --allow-push    # same as Update board, then start
 ```
 
-Tail log without the UI:
+---
 
-```bash
-adb shell tail -f /home/root/gemy.log
-```
+## Quick reminder
+
+| | New / lab board | Advanced board |
+|--|-----------------|----------------|
+| **Update board from this repo** | Yes — once (or when you want this repo’s scripts) | **No** |
+| **Start Gemy** | After update | Anytime |
+| **Refresh** | Safe (does not push) | Safe (does not push) |
+
+---
 
 ## Layout
 
 ```
 mac/
-  start-hub.sh          # Control Center
-  start-gemy.sh         # start board greeter (no push)
+  start-hub.sh          # Control Center (browser)
+  make-shortcut.sh      # Desktop icon
+  start-gemy.sh         # start greeter (no push by default)
   cleanup-board.sh
   recover-board.sh
-  hub/hub_server.py     # local HTTP API + UI
-  hub/www/              # Mac-tuned Control Center pages
+  hub/                  # UI + local server
 ```
 
-## Windows parity
+## Windows
 
-On Windows, full demos still live under `windows/`. Prefer:
+Full jam deploy lives under `windows/`. If the board is ahead of this repo on Windows too:
 
 ```powershell
 .\greet-demo.ps1 -NoPush
+# or before the hub:
+$env:GEMY_NO_PUSH = "1"
 ```
-
-when the board is ahead of this repo (same “don’t overwrite” idea).

@@ -37,6 +37,12 @@ ALLOW_PUSH = False
 LAST_HEALTH: dict[str, Any] | None = None
 
 
+def set_last_health(health: dict[str, Any]) -> dict[str, Any]:
+    global LAST_HEALTH
+    LAST_HEALTH = health
+    return health
+
+
 def add_activity(message: str, level: str = "info") -> dict[str, str]:
     entry = {
         "time": time.strftime("%H:%M:%S"),
@@ -211,17 +217,13 @@ def open_in_terminal(script: Path, extra_args: list[str] | None = None) -> None:
     subprocess.Popen(["osascript", "-e", osa], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def sync_board_if_allowed() -> dict[str, Any]:
-    if not ALLOW_PUSH:
-        return {
-            "ok": True,
-            "message": "Skipped push — Mac hub never overwrites board code by default.",
-            "skipped": True,
-        }
+def push_repo_to_board() -> dict[str, Any]:
+    """Explicit adb push of this repo's board scripts (overwrites board copy)."""
     if not board_connected():
         return {"ok": False, "message": "Board not connected on ADB.", "skipped": False}
 
-    push_list = [
+    push_list: list[tuple[Path, str]] = []
+    for name in (
         "greeter.py",
         "hat.py",
         "gemma_mood.py",
@@ -237,15 +239,44 @@ def sync_board_if_allowed() -> dict[str, Any]:
         "gemy_phrase_buffer.py",
         "gemy_heartbeat_smoke.py",
         "gemy_reactions.py",
-    ]
-    for name in push_list:
+    ):
         local = REPO_ROOT / "board" / "python" / name
-        if not local.is_file():
-            continue
+        if local.is_file():
+            push_list.append((local, name))
+    boot = REPO_ROOT / "board" / "shell" / "gemy-boot.sh"
+    if boot.is_file():
+        push_list.append((boot, "gemy-boot.sh"))
+
+    if not push_list:
+        return {"ok": False, "message": "No board scripts found in this repo.", "skipped": False}
+
+    synced: list[str] = []
+    for local, name in push_list:
         code, out = adb("push", str(local), f"/home/root/{name}", timeout=60)
         if code != 0:
-            return {"ok": False, "message": f"adb push failed: {name} ({out.strip()})", "skipped": False}
-    return {"ok": True, "message": "Board scripts synced from this repo.", "skipped": False}
+            return {
+                "ok": False,
+                "message": f"adb push failed: {name} ({out.strip()})",
+                "skipped": False,
+            }
+        synced.append(name)
+
+    return {
+        "ok": True,
+        "message": f"Updated board from this repo ({len(synced)} files).",
+        "skipped": False,
+        "files": synced,
+    }
+
+
+def sync_board_if_allowed() -> dict[str, Any]:
+    if not ALLOW_PUSH:
+        return {
+            "ok": True,
+            "message": "Skipped push — use “Update board from this repo” only when you want to overwrite.",
+            "skipped": True,
+        }
+    return push_repo_to_board()
 
 
 def resolve_static(rel: str) -> Path | None:
@@ -308,9 +339,8 @@ class HubHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         if path == "/api/health":
-            global LAST_HEALTH
-            LAST_HEALTH = get_health()
-            self._json({"ok": True, "health": LAST_HEALTH, "activity": list(ACTIVITY)})
+            health = set_last_health(get_health())
+            self._json({"ok": True, "health": health, "activity": list(ACTIVITY)})
             return
         if path == "/api/activity":
             self._json({"ok": True, "activity": list(ACTIVITY)})
@@ -363,9 +393,7 @@ class HubHandler(BaseHTTPRequestHandler):
 
         if path == "/api/refresh":
             add_activity("Checking connection (no board push)…")
-            health = get_health()
-            global LAST_HEALTH
-            LAST_HEALTH = health
+            health = set_last_health(get_health())
             sync = sync_board_if_allowed()
             add_activity(sync["message"], "ok" if sync["ok"] else "error")
             add_activity(
@@ -396,6 +424,32 @@ class HubHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/update-board":
+            if not board_connected():
+                add_activity("Cannot update — board not on ADB.", "error")
+                self._json(
+                    {
+                        "ok": False,
+                        "message": "Board not on ADB. Plug USB-C and refresh.",
+                        "activity": list(ACTIVITY),
+                    }
+                )
+                return
+            add_activity("Updating board from this repo (adb push)…", "warn")
+            result = push_repo_to_board()
+            add_activity(result["message"], "ok" if result["ok"] else "error")
+            health = set_last_health(get_health())
+            self._json(
+                {
+                    "ok": result["ok"],
+                    "message": result["message"],
+                    "health": health,
+                    "activity": list(ACTIVITY),
+                    "files": result.get("files") or [],
+                }
+            )
+            return
+
         if path == "/api/start-gemy":
             if not board_connected():
                 add_activity("Cannot start — board not on ADB.", "error")
@@ -408,11 +462,11 @@ class HubHandler(BaseHTTPRequestHandler):
                 )
                 return
             if not board_has_greeter():
-                add_activity("No greeter.py on board — not pushing from Mac hub.", "error")
+                add_activity("No greeter.py on board — use Update board from this repo first.", "error")
                 self._json(
                     {
                         "ok": False,
-                        "message": "Board has no greeter.py. This hub will not push repo code.",
+                        "message": "Board has no greeter.py. Press “Update board from this repo”, then Start.",
                         "activity": list(ACTIVITY),
                     }
                 )

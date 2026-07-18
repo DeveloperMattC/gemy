@@ -27,7 +27,7 @@
         <h2 id="health-heading">System status</h2>
         <button type="button" id="btn-refresh" class="btn btn-ghost">Refresh</button>
       </div>
-      <p class="hint">This Mac hub <strong>does not push</strong> repo code to the board. It monitors and starts whatever Gemy is already on the Coralboard.</p>
+      <p class="hint">By default this hub <strong>does not push</strong> — it monitors the board. If the board is empty or behind this repo, use <strong>Update board from this repo</strong> below (confirm first).</p>
       <ul id="health-list" class="health-grid"></ul>
       <p id="greeter-hint" class="hint greeter-hint hidden"></p>
     </section>
@@ -55,6 +55,10 @@
           <button type="button" id="btn-hat" class="btn btn-accent">HAT beep test</button>
           <button type="button" id="btn-cleanup" class="btn btn-danger">Stop buzzer &amp; reset board</button>
         </div>
+        <button type="button" id="btn-update-board" class="btn btn-secondary btn-block">
+          Update board from this repo
+        </button>
+        <p class="hint">Copies this Mac’s <code>board/python</code> onto the Coralboard. Overwrites newer board code — only use when the board needs this repo’s lab scripts.</p>
         <button type="button" id="btn-driver" class="btn btn-ghost btn-block driver-btn hidden">
           Install USB network driver (Windows only)
         </button>
@@ -83,7 +87,7 @@
   </main>
 
   <footer class="footer">
-    <p>Mac hub never overwrites board scripts unless started with <code>--allow-push</code>. Close this terminal to stop the dashboard server.</p>
+    <p>Refresh never pushes. Only <strong>Update board from this repo</strong> overwrites board scripts. Close this terminal to stop the dashboard server.</p>
   </footer>
 
   <div id="toast" class="toast hidden" role="status"></div>

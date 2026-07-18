@@ -67,7 +67,14 @@ mac/              macOS Control Center + helpers (monitor; no adb push by defaul
 docs/lab/         CODE-JAM.md + lab docs
 ```
 
-**Advanced board?** Do not run the default Windows Start/Refresh sync — it `adb push`es this repo onto the board. On Mac use [`mac/README.md`](mac/README.md). On Windows use `.\greet-demo.ps1 -NoPush` or set `GEMY_NO_PUSH=1` before the hub.
+**Mac users — pick your path** (plain steps): [`mac/README.md`](mac/README.md)
+
+| Board | What to do |
+|-------|------------|
+| **New / wants this lab’s Gemy** | Open Mac Control Center → **Update board from this repo** → **Start Gemy** |
+| **Advanced Gemy (ahead of this repo)** | Open Mac Control Center → **do not** Update → only Start / monitor |
+
+**Windows + advanced board?** Don’t use default hub Refresh/Start sync. Use `.\greet-demo.ps1 -NoPush` or `$env:GEMY_NO_PUSH = "1"` before the hub.
 
 Operator cheat sheet: [docs/CORALBOARD-GUIDE.md](docs/CORALBOARD-GUIDE.md)
 
