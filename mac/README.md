@@ -32,6 +32,14 @@ adb devices   # should show grinn-astra-… device after USB-C plug-in
 
 Opens `http://127.0.0.1:8765/` — status, start/stop, board log, processes. Keep that terminal open.
 
+### Desktop shortcut
+
+```bash
+./mac/make-shortcut.sh
+```
+
+Puts **Gemy Control Center.app** (and a `.command` fallback) on your Desktop. Double-click to open the hub + browser. If macOS blocks it the first time: right-click → **Open** → **Open**.
+
 ## CLI options
 
 ```bash
