@@ -3,7 +3,7 @@
 **Single place for goals, current state, done work, and what to try next.**  
 Update this file when you finish a meaningful chunk of work (see [.cursor/skills/gemy-planning/SKILL.md](../../.cursor/skills/gemy-planning/SKILL.md)).
 
-**Last updated:** 2026-05-31
+**Last updated:** 2026-07-17
 
 ---
 
@@ -108,6 +108,10 @@ Pick **one** board-validated item before adding features.
 ## Session log (optional, newest first)
 
 Short notes so the next session knows context without reading the whole chat.
+
+### 2026-07-17
+- Added `mac/` Control Center + CLI helpers; **no adb push by default** so an advanced board is not overwritten.
+- Windows: `greet-demo.ps1 -NoPush`; hub respects `GEMY_NO_PUSH=1` (skip sync / pass `-NoPush`).
 
 ### 2026-05-31
 - Sky Q&A working on board; moon+cheese froze until `norm_qa` + skip Gemma.

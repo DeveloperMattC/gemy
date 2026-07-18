@@ -37,15 +37,16 @@ When editing Gemy code or Windows launchers, Cursor also loads:
 | Main app | `board/python/greeter.py` | Vision + speech + mood dispatch |
 | HAT driver | `board/python/hat.py` | `gemy_funny` (rainbow+joke), `gemy_mean`, `gemy_sad`, … |
 | Gemma moods | `board/python/gemma_mood.py`, `gemma_mood_worker.py` | Assist only; invalid label → neutral |
-| PC launcher | `windows/demos/greet-demo.ps1` | Default **local moods only** (no NPU); `-GemmaMoodAssist` experimental |
+| PC launcher | `windows/demos/greet-demo.ps1` | Default **local moods only** (no NPU); `-GemmaMoodAssist` experimental; `-NoPush` for advanced boards |
 | Control Center | `windows/hub/` | Web UI → `greet-demo.ps1`; port ~8765 |
+| Mac host | `mac/` | Monitor/control UI; **no adb push by default** |
 | Boot autostart | `board/shell/gemy-boot.sh`, `GemyFeatures.ps1` | **Off by default**; boot uses `--no-gemma-mood --no-vision` |
 
 **Moods:** `gemy`, `greet`, `funny`, `nice`, `mean`, `sad`, `yes`, `no`, `neutral`, `off`.
 
 **Classification:** keywords + math → optional Gemma assist → `resolve_reaction_kind()` (unknown → neutral).
 
-**Stack:** Python on board; PowerShell + browser Control Center on Windows. **Gemma 3 270M** only (not Gemma 4 on this hardware).
+**Stack:** Python on board; PowerShell + browser Control Center on Windows; optional Mac hub in `mac/` (monitor-only by default). **Gemma 3 270M** only (not Gemma 4 on this hardware).
 
 ---
 
@@ -80,11 +81,19 @@ Full write-up: [docs/lab/LEARNINGS.md](docs/lab/LEARNINGS.md).
 
 ```powershell
 .\greet-demo.ps1                    # push + start (local moods, no NPU)
-.\greet-demo.ps1 -GemmaMoodAssist    # experimental Gemma on neutral only
+.\greet-demo.ps1 -NoPush            # start board-resident greeter (do not overwrite)
+.\greet-demo.ps1 -GemmaMoodAssist   # experimental Gemma on neutral only
 .\greet-demo.ps1 -NoVision          # voice only
 .\recover-board.ps1                 # emergency: unfreeze + kill Gemma worker
 .\cleanup-board.ps1                 # full cleanup (slower)
 .\windows\hub\coralboard-hub.ps1    # Control Center
+```
+
+```bash
+# macOS (monitor / control — does not push board code)
+./mac/start-hub.sh
+./mac/start-gemy.sh --no-vision
+./mac/recover-board.sh
 ```
 
 On board, success line: **`[ears] listening (moods: …)`**.

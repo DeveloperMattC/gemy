@@ -139,14 +139,19 @@ function Invoke-HubRefresh {
     }
 
     if ($health.BoardConnected) {
-        Add-HubActivity 'Syncing latest Gemy scripts (safe to repeat)...'
-        $sync = Sync-BoardGemyFiles -Quiet
-        $lvl = if ($sync.Ok) { 'ok' } else { 'error' }
-        Add-HubActivity $sync.Message $lvl
-        if (-not $sync.Ok) {
-            $health = Get-BoardHealth
-            $script:HubLastHealth = $health
-            return @{ ok = $false; health = (ConvertTo-HubHealthDto $health); message = $sync.Message }
+        $noPush = ($env:GEMY_NO_PUSH -eq '1')
+        if ($noPush) {
+            Add-HubActivity 'Board connected — skipped script sync (GEMY_NO_PUSH=1).' 'ok'
+        } else {
+            Add-HubActivity 'Syncing latest Gemy scripts (safe to repeat)...'
+            $sync = Sync-BoardGemyFiles -Quiet
+            $lvl = if ($sync.Ok) { 'ok' } else { 'error' }
+            Add-HubActivity $sync.Message $lvl
+            if (-not $sync.Ok) {
+                $health = Get-BoardHealth
+                $script:HubLastHealth = $health
+                return @{ ok = $false; health = (ConvertTo-HubHealthDto $health); message = $sync.Message }
+            }
         }
         $health = Get-BoardHealth
     }
@@ -175,6 +180,10 @@ function Invoke-HubStartGemy {
         return @{ ok = $false; message = 'Board not on ADB. Plug USB-C and refresh.' }
     }
     if (-not $h.GemyScripts) {
+        if ($env:GEMY_NO_PUSH -eq '1') {
+            Add-HubActivity 'greeter.py missing on board; GEMY_NO_PUSH=1 blocks sync.' 'error'
+            return @{ ok = $false; message = 'Board has no greeter.py and GEMY_NO_PUSH=1 (will not overwrite).' }
+        }
         Add-HubActivity 'Syncing scripts before launch...'
         $sync = Sync-BoardGemyFiles -Quiet
         Add-HubActivity $sync.Message $(if ($sync.Ok) { 'ok' } else { 'error' })
@@ -193,6 +202,7 @@ function Invoke-HubStartGemy {
     $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', $path)
     if ($NoVision) { $args += '-NoVision' }
     if ($NoGemmaMood) { $args += '-NoGemmaMood' }
+    if ($env:GEMY_NO_PUSH -eq '1') { $args += '-NoPush' }
     Start-Process powershell -WorkingDirectory $wd -ArgumentList $args | Out-Null
 
     $mode = if ($NoGemmaMood) { 'keywords only, no Gemma' } else { 'keywords + Gemma assist' }

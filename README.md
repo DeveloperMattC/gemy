@@ -2,10 +2,11 @@
 
 **90-minute hands-on jam:** plug in a Coralboard, open Control Center, and build a robot that **hears**, **sees waves**, and **reacts with vibes** (beeps + rainbow / red / blue).
 
-**Stack:** Python on the board (`greeter.py`, `hat.py`); PowerShell + browser UI on Windows (`windows/hub/`). Speech uses **Moonshine** STT; moods use **keyword rules first**, optional **Gemma 3 270M** assist — not Gemma 4 (too large for this board).
+**Stack:** Python on the board (`greeter.py`, `hat.py`); **Windows** PowerShell + browser UI (`windows/hub/`) for the Code Jam lab; **macOS** monitor/control UI in [`mac/`](mac/README.md) (no board overwrite by default). Speech uses **Moonshine** STT; moods use **keyword rules first**, optional **Gemma 3 270M** assist — not Gemma 4 (too large for this board).
 
 [![Hardware](https://img.shields.io/badge/Hardware-Coralboard%20%2B%20Sensor%20HAT-blue)](docs/CORALBOARD-GUIDE.md)
 [![Host](https://img.shields.io/badge/Host-Windows%2010%2F11-0078D6)](docs/CORALBOARD-GUIDE.md)
+[![Host](https://img.shields.io/badge/Host-macOS%20monitor-grey)](mac/README.md)
 [![Jam](https://img.shields.io/badge/Start-CODE--JAM-green)](docs/lab/CODE-JAM.md)
 
 **Demo video:** [Watch Gemy on Coralboard (Google Photos)](https://photos.google.com/share/AF1QipMbPbwXUzknBdhTQ45QUKH_kgF2tNoz5nDwCJDY639jZIquuocTetWdLV-zYc-Jpw?key=U3JZTWpfUi1adk1BeDI4dE1vZjY0UkZXVHg1aHNB) — public shared album: LED and buzzer reactions, laughing, yes/no answers, and greetings.
@@ -60,10 +61,13 @@ Details: [docs/lab/08-GEMY-MOODS-AND-REACTIONS.md](docs/lab/08-GEMY-MOODS-AND-RE
 
 ```
 board/python/     greeter.py, hat.py, gemma_mood*.py, gemy_stability.py
-windows/hub/      Control Center (browser UI, PowerShell server)
+windows/hub/      Control Center (browser UI, PowerShell server) — lab default
 windows/demos/    greet-demo.ps1, hat-gui.ps1
+mac/              macOS Control Center + helpers (monitor; no adb push by default)
 docs/lab/         CODE-JAM.md + lab docs
 ```
+
+**Advanced board?** Do not run the default Windows Start/Refresh sync — it `adb push`es this repo onto the board. On Mac use [`mac/README.md`](mac/README.md). On Windows use `.\greet-demo.ps1 -NoPush` or set `GEMY_NO_PUSH=1` before the hub.
 
 Operator cheat sheet: [docs/CORALBOARD-GUIDE.md](docs/CORALBOARD-GUIDE.md)
 
